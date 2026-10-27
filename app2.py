@@ -24,68 +24,86 @@ CATEGORIES = [
 SEASONS = ["Всесезонная", "Весна", "Лето", "Осень", "Зима"]
 OCCASIONS = ["Повседневный", "Учёба / работа", "Праздник", "Спорт", "Прогулка"]
 
-# Фирменная палитра: сливочный, сливовый, вишнёвый и мягкий жёлтый
-CREAM = "#F7F5F0"
-PLUM = "#49364D"
-CHERRY = "#A63A4B"
-BUTTER = "#F2DE93"
-INK = "#29252B"
-SIDEBAR = "#EEE9E1"
-
-st.set_page_config(
-    page_title="Умный шкаф",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
+# Сливовая палитра с контрастным тёмным текстом и светлыми полями
+CREAM = "#F7F3F7"       # фон приложения
+PLUM = "#4B3152"        # основные сливовые элементы
+CHERRY = "#963B55"      # кнопки при наведении и акцент
+BUTTER = "#F2DE93"      # небольшие выделения
+INK = "#2D2430"         # основной текст — тёмный
+SIDEBAR = "#E9E1EB"     # фон бокового меню
+SURFACE = "#FFFFFF"     # фон форм и полей
+BORDER = "#D8CBDC"      # границы
 
 st.markdown(
     f"""
     <style>
-      .stApp {{
+      .stApp,
+      [data-testid="stAppViewContainer"] {{
         background: {CREAM};
         color: {INK};
       }}
+
       [data-testid="stSidebar"] {{
         background: {SIDEBAR};
       }}
-      h1, h2, h3 {{
-        color: {PLUM};
+
+      h1, h2, h3, h4,
+      [data-testid="stMarkdownContainer"],
+      [data-testid="stCaptionContainer"] {{
+        color: {INK};
       }}
-      div.stButton > button {{
+
+      /* Поля ввода — светлый фон, тёмный текст */
+      input, textarea,
+      [data-baseweb="select"] > div {{
+        background: {SURFACE} !important;
+        color: {INK} !important;
+        border-color: {BORDER} !important;
+      }}
+
+      input::placeholder,
+      textarea::placeholder {{
+        color: #716676 !important;
+        opacity: 1;
+      }}
+
+      /* Кнопки */
+      div.stButton > button,
+      div.stFormSubmitButton > button {{
         background: {PLUM};
-        color: white;
+        color: #FFFFFF;
         border: 0;
         border-radius: 10px;
         padding: 0.55rem 1rem;
         font-weight: 600;
       }}
-      div.stButton > button:hover {{
+
+      div.stButton > button:hover,
+      div.stFormSubmitButton > button:hover {{
         background: {CHERRY};
-        color: white;
-        border: 0;
+        color: #FFFFFF;
       }}
-      div[data-testid="stForm"] {{
-        background: rgba(255,255,255,0.7);
-        padding: 1rem;
+
+      /* Формы и карточки */
+      div[data-testid="stForm"],
+      [data-testid="stVerticalBlockBorderWrapper"] {{
+        background: {SURFACE};
+        border: 1px solid {BORDER};
         border-radius: 14px;
-        border: 1px solid #E4DDE2;
       }}
+
       .hero {{
         background: {PLUM};
-        color: white;
+        color: #FFFFFF;
         padding: 1.5rem 1.7rem;
         border-radius: 18px;
         margin-bottom: 1rem;
       }}
-      .hero h1 {{
-        color: white;
-        margin: 0;
+
+      .hero h1, .hero p {{
+        color: #FFFFFF;
       }}
-      .hero p {{
-        color: white;
-        margin-bottom: 0;
-      }}
+
       .tag {{
         display: inline-block;
         background: {BUTTER};
@@ -396,9 +414,29 @@ def show_photo(path, width=220):
 
 
 def show_outfit(outfit):
-    st.write(" · ".join(
-        f"{item['name']} ({item['color']})" for item in outfit
-    ))
+    """Показывает комплект карточками с фотографиями и подписями."""
+    if not outfit:
+        st.caption("В этом образе пока нет вещей.")
+        return
+
+    # Не больше трёх вещей в одном ряду — так удобнее смотреть с телефона.
+    for start in range(0, len(outfit), 3):
+        row_items = outfit[start:start + 3]
+        cols = st.columns(len(row_items))
+
+        for col, item in zip(cols, row_items):
+            with col:
+                photo_path = item["photo_path"]
+
+                if photo_path and Path(photo_path).exists():
+                    st.image(photo_path, width=220)
+                else:
+                    st.info("Для этой вещи пока нет фото")
+
+                st.caption(
+                    f"**{item['name']}**\n\n"
+                    f"{item['category']} · {item['color']}"
+                )
 
 
 # ---------- Запуск ----------
@@ -840,14 +878,12 @@ elif page == "Мои образы":
                     for value in outfit["item_ids"].split(",")
                     if value
                 ]
-                names = [
-                    clothes_by_id[item_id]["name"]
+                saved_items = [
+                    clothes_by_id[item_id]
                     for item_id in item_ids
                     if item_id in clothes_by_id
                 ]
-
-                st.write(
-                    " · ".join(names)
-                    if names
-                    else "Вещи из этого образа уже удалены из гардероба."
-                )
+                if saved_items:
+                    show_outfit(saved_items)
+                else:
+                    st.write("Вещи из этого образа уже удалены из гардероба.")
