@@ -302,15 +302,9 @@ def update_outfit(outfit_id, name, item_ids):
 
 def delete_outfit(outfit_id):
     with connect_db() as conn:
-        conn.execute("DELETE FROM outfits WHERE id = ?", (outfit_id,))
-    with connect_db() as conn:
         conn.execute(
-            "INSERT INTO outfits (name, item_ids, created_at) VALUES (?, ?, ?)",
-            (
-                name.strip(),
-                ",".join(map(str, item_ids)),
-                date.today().isoformat(),
-            ),
+            "DELETE FROM outfits WHERE id = ?",
+            (outfit_id,),
         )
 
 # ---------- Подбор по цветам ----------
