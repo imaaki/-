@@ -730,7 +730,7 @@ elif page == "Мой гардероб":
                                             else None
                                         )
                                         update_clothing(
-                                            item["id"]
+                                            item["id"],
                                             edited_name,
                                             edited_category,
                                             edited_color,
