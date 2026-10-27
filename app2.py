@@ -1011,8 +1011,8 @@ elif page == "Мои образы":
        labels = {
     f"{item['name']} — {item['color']} ({item['category']}) · ID {item['id']}":
     item["id"]
-    for item in clothes
        }
+    for item in clothes
 for outfit in outfits:
     with st.container(border=True):
         st.subheader(outfit["name"])
