@@ -750,11 +750,11 @@ elif page == "Мой гардероб":
                                         ):
                                             mark_worn(item["id"])
                                             st.rerun()
-                                            if st.button
+                                        if st.button
                                             "Удалить вещь",
                                             key=f"delete_{item['id']}",
                                             use_container_width=True,
-                                            ):
+                                        ):
                                             delete_clothing(item["id"])
                                             st.rerun()
 
