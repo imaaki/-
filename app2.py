@@ -232,6 +232,66 @@ def delete_clothing(item_id):
 
 
 def save_outfit(name, item_ids):
+    def update_clothing(
+    item_id, name, category, color, season, notes, occasions, new_photo_path=None
+):
+    """Обновляет вещь. Если новое фото не загружено, старое остаётся."""
+    with connect_db() as conn:
+        old_photo = conn.execute(
+            "SELECT photo_path FROM clothes WHERE id = ?", (item_id,)
+        ).fetchone()
+
+        if new_photo_path is None:
+            conn.execute(
+                """
+                UPDATE clothes
+                SET name = ?, category = ?, color = ?, season = ?,
+                    notes = ?, occasions = ?
+                WHERE id = ?
+                """,
+                (
+                    name.strip(), category, color.strip(), season,
+                    notes.strip(), ", ".join(occasions), item_id,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE clothes
+                SET name = ?, category = ?, color = ?, season = ?,
+                    notes = ?, occasions = ?, photo_path = ?
+                WHERE id = ?
+                """,
+                (
+                    name.strip(), category, color.strip(), season,
+                    notes.strip(), ", ".join(occasions),
+                    new_photo_path, item_id,
+                ),
+            )
+
+    # Удаляем старый файл фотографии только после замены.
+    if new_photo_path and old_photo and old_photo[0]:
+        try:
+            Path(old_photo[0]).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def update_outfit(outfit_id, name, item_ids):
+    with connect_db() as conn:
+        conn.execute(
+            "UPDATE outfits SET name = ?, item_ids = ? WHERE id = ?",
+            (
+                name.strip(),
+                ",".join(map(str, item_ids)),
+                outfit_id,
+            ),
+        )
+
+
+def delete_outfit(outfit_id):
+    with connect_db() as conn:
+        conn.execute("DELETE FROM outfits WHERE id = ?", (outfit_id,))
     with connect_db() as conn:
         conn.execute(
             "INSERT INTO outfits (name, item_ids, created_at) VALUES (?, ?, ?)",
@@ -598,6 +658,90 @@ elif page == "Мой гардероб":
                         st.caption(f"Поводы: {item['occasions']}")
                     if item["notes"]:
                         st.write(item["notes"])
+                        with st.expander("Редактировать вещь"):
+    with st.form(f"edit_clothing_{item['id']}"):
+        edited_name = st.text_input(
+            "Название",
+            value=item["name"],
+            key=f"edit_name_{item['id']}",
+        )
+
+        category_index = (
+            CATEGORIES.index(item["category"])
+            if item["category"] in CATEGORIES else 0
+        )
+        edited_category = st.selectbox(
+            "Категория",
+            CATEGORIES,
+            index=category_index,
+            key=f"edit_category_{item['id']}",
+        )
+
+        edited_color = st.text_input(
+            "Цвет",
+            value=item["color"],
+            key=f"edit_color_{item['id']}",
+        )
+
+        season_index = (
+            SEASONS.index(item["season"])
+            if item["season"] in SEASONS else 0
+        )
+        edited_season = st.selectbox(
+            "Сезон",
+            SEASONS,
+            index=season_index,
+            key=f"edit_season_{item['id']}",
+        )
+
+        old_occasions = [
+            value.strip()
+            for value in (item["occasions"] or "").split(",")
+            if value.strip()
+        ]
+        edited_occasions = st.multiselect(
+            "Для каких поводов подходит",
+            OCCASIONS,
+            default=[x for x in old_occasions if x in OCCASIONS],
+            key=f"edit_occasions_{item['id']}",
+        )
+
+        edited_notes = st.text_area(
+            "Заметки",
+            value=item["notes"] or "",
+            key=f"edit_notes_{item['id']}",
+        )
+
+        replacement_photo = st.file_uploader(
+            "Новое фото (необязательно)",
+            type=["jpg", "jpeg", "png", "webp"],
+            key=f"edit_photo_{item['id']}",
+        )
+
+        save_edit = st.form_submit_button("Сохранить изменения")
+
+        if save_edit:
+            if not edited_name.strip() or not edited_color.strip():
+                st.error("Название и цвет не должны быть пустыми.")
+            else:
+                new_photo_path = (
+                    save_photo(replacement_photo)
+                    if replacement_photo is not None
+                    else None
+                )
+
+                update_clothing(
+                    item["id"],
+                    edited_name,
+                    edited_category,
+                    edited_color,
+                    edited_season,
+                    edited_notes,
+                    edited_occasions,
+                    new_photo_path,
+                )
+                st.success("Изменения сохранены.")
+                st.rerun()
 
                     last_text = item["last_worn"] or "Пока не отмечено"
                     st.caption(f"Последняя носка: {last_text}")
@@ -868,22 +1012,78 @@ elif page == "Мои образы":
     else:
         clothes_by_id = {item["id"]: item for item in clothes}
 
-        for outfit in outfits:
-            with st.container(border=True):
-                st.subheader(outfit["name"])
-                st.caption(f"Создан: {outfit['created_at']}")
+       labels = {
+    f"{item['name']} — {item['color']} ({item['category']}) · ID {item['id']}":
+    item["id"]
+    for item in clothes
+}
+for outfit in outfits:
+    with st.container(border=True):
+        st.subheader(outfit["name"])
+        st.caption(f"Создан: {outfit['created_at']}")
 
-                item_ids = [
-                    int(value)
-                    for value in outfit["item_ids"].split(",")
-                    if value
+        item_ids = [
+            int(value)
+            for value in outfit["item_ids"].split(",")
+            if value
+        ]
+        saved_items = [
+            clothes_by_id[item_id]
+            for item_id in item_ids
+            if item_id in clothes_by_id
+        ]
+
+        if saved_items:
+            show_outfit(saved_items)
+        else:
+            st.write("Вещи из этого образа уже удалены из гардероба.")
+
+        with st.expander("Редактировать образ"):
+            with st.form(f"edit_outfit_{outfit['id']}"):
+                edited_outfit_name = st.text_input(
+                    "Название образа",
+                    value=outfit["name"],
+                    key=f"edit_outfit_name_{outfit['id']}",
+                )
+
+                current_labels = [
+                    label
+                    for label, clothing_id in labels.items()
+                    if clothing_id in item_ids
                 ]
-                saved_items = [
-                    clothes_by_id[item_id]
-                    for item_id in item_ids
-                    if item_id in clothes_by_id
-                ]
-                if saved_items:
-                    show_outfit(saved_items)
-                else:
-                    st.write("Вещи из этого образа уже удалены из гардероба.")
+
+                selected_labels = st.multiselect(
+                    "Вещи в образе",
+                    options=list(labels.keys()),
+                    default=current_labels,
+                    key=f"edit_outfit_items_{outfit['id']}",
+                )
+
+                save_outfit_edit = st.form_submit_button(
+                    "Сохранить образ"
+                )
+
+                if save_outfit_edit:
+                    selected_ids = [
+                        labels[label] for label in selected_labels
+                    ]
+
+                    if not edited_outfit_name.strip():
+                        st.error("Укажи название образа.")
+                    elif len(selected_ids) < 2:
+                        st.error("Выбери минимум две вещи.")
+                    else:
+                        update_outfit(
+                            outfit["id"],
+                            edited_outfit_name,
+                            selected_ids,
+                        )
+                        st.success("Образ обновлён.")
+                        st.rerun()
+
+        if st.button(
+            "Удалить образ",
+            key=f"delete_outfit_{outfit['id']}",
+        ):
+            delete_outfit(outfit["id"])
+            st.rerun()
