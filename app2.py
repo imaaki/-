@@ -668,108 +668,95 @@ elif page == "Мой гардероб":
                     if item["notes"]:
                         st.write(item["notes"])
                         with st.expander("Редактировать вещь"):
-    with st.form(f"edit_clothing_{item['id']}"):
-        edited_name = st.text_input(
-            "Название",
-            value=item["name"],
-            key=f"edit_name_{item['id']}",
-        )
-
-        category_index = (
-            CATEGORIES.index(item["category"])
-            if item["category"] in CATEGORIES else 0
-        )
-        edited_category = st.selectbox(
-            "Категория",
-            CATEGORIES,
-            index=category_index,
-            key=f"edit_category_{item['id']}",
-        )
-
-        edited_color = st.text_input(
-            "Цвет",
-            value=item["color"],
-            key=f"edit_color_{item['id']}",
-        )
-
-        season_index = (
-            SEASONS.index(item["season"])
-            if item["season"] in SEASONS else 0
-        )
-        edited_season = st.selectbox(
-            "Сезон",
-            SEASONS,
-            index=season_index,
-            key=f"edit_season_{item['id']}",
-        )
-
-        old_occasions = [
-            value.strip()
-            for value in (item["occasions"] or "").split(",")
-            if value.strip()
-        ]
-        edited_occasions = st.multiselect(
-            "Для каких поводов подходит",
-            OCCASIONS,
-            default=[x for x in old_occasions if x in OCCASIONS],
-            key=f"edit_occasions_{item['id']}",
-        )
-
-        edited_notes = st.text_area(
-            "Заметки",
-            value=item["notes"] or "",
-            key=f"edit_notes_{item['id']}",
-        )
-
-        replacement_photo = st.file_uploader(
-            "Новое фото (необязательно)",
-            type=["jpg", "jpeg", "png", "webp"],
-            key=f"edit_photo_{item['id']}",
-        )
-
-        save_edit = st.form_submit_button("Сохранить изменения")
-
-        if save_edit:
-            if not edited_name.strip() or not edited_color.strip():
-                st.error("Название и цвет не должны быть пустыми.")
-            else:
-                new_photo_path = (
-                    save_photo(replacement_photo)
-                    if replacement_photo is not None
-                    else None
-                )
-
-                update_clothing(
-                    item["id"],
-                    edited_name,
-                    edited_category,
-                    edited_color,
-                    edited_season,
-                    edited_notes,
-                    edited_occasions,
-                    new_photo_path,
-                )
-                st.success("Изменения сохранены.")
-                st.rerun()
-
-                    last_text = item["last_worn"] or "Пока не отмечено"
-                    st.caption(f"Последняя носка: {last_text}")
-
-                    if st.button(
-                        "Надела сегодня",
-                        key=f"worn_{item['id']}",
-                        use_container_width=True,
-                    ):
-                        mark_worn(item["id"])
-                        st.rerun()
-
-                    if st.button(
-                        "Удалить вещь",
-                        key=f"delete_{item['id']}",
-                        use_container_width=True,
-                    ):
-                        delete_clothing(item["id"])
-                        st.rerun()
+                            with st.form(f"edit_clothing_{item['id']}"):
+                                edited_name = st.text_input(
+                                    "Название",
+                                    value=item["name"],
+                                    key=f"edit_name_{item['id']}",)
+                                category_index = (
+                                    CATEGORIES.index(item["category"])
+                                    if item["category"] in CATEGORIES else 0
+                                )
+                                edited_category = st.selectbox(
+                                    "Категория",
+                                    CATEGORIES,
+                                    index=category_index,
+                                    key=f"edit_category_{item['id']}",
+                                )
+                                edited_color = st.text_input(
+                                    "Цвет",
+                                    value=item["color"],
+                                    key=f"edit_color_{item['id']}",
+                                )
+                                season_index = (
+                                    SEASONS.index(item["season"])
+                                    if item["season"] in SEASONS else 0
+                                )
+                                edited_season = st.selectbox(
+                                    "Сезон",
+                                    SEASONS,
+                                    index=season_index,
+                                    key=f"edit_season_{item['id']}",
+                                )
+                                old_occasions = [
+                                    value.strip()
+                                    for value in (item["occasions"] or "").split(",")
+                                    if value.strip()
+                                ]
+                                edited_occasions = st.multiselect(
+                                    "Для каких поводов подходит",
+                                    OCCASIONS,
+                                    default=[x for x in old_occasions if x in OCCASIONS],
+                                    key=f"edit_occasions_{item['id']}",
+                                )
+                                edited_notes = st.text_area(
+                                    "Заметки",
+                                    value=item["notes"] or "",
+                                    key=f"edit_notes_{item['id']}",
+                                )
+                                replacement_photo = st.file_uploader(
+                                    "Новое фото (необязательно)",
+                                    type=["jpg", "jpeg", "png", "webp"],
+                                    key=f"edit_photo_{item['id']}",
+                                )
+                                save_edit = st.form_submit_button("Сохранить изменения")
+                                if save_edit:
+                                    if not edited_name.strip() or not edited_color.strip():
+                                        st.error("Название и цвет не должны быть пустыми.")
+                                    else:
+                                        new_photo_path = (
+                                            save_photo(replacement_photo)
+                                            if replacement_photo is not None
+                                            else None
+                                        )
+                                        update_clothing(
+                                            item["id"]
+                                            edited_name,
+                                            edited_category,
+                                            edited_color,
+                                            edited_season,
+                                            edited_notes,
+                                            edited_occasions,
+                                            new_photo_path,
+                                        )
+                                        st.success("Изменения сохранены.")
+                                        st.rerun()
+                                        last_text = item["last_worn"] or "Пока не отмечено"
+                                        st.caption(f"Последняя носка: {last_text}")
+                                        if st.button(
+                                            "Надела сегодня",
+                                            key=f"worn_{item['id']}",
+                                            use_container_width=True,
+                                        ):
+                                            mark_worn(item["id"])
+                                            st.rerun()
+                                            if st.button
+                                            "Удалить вещь",
+                                            key=f"delete_{item['id']}",
+                                            use_container_width=True,
+                                            ):
+                                            delete_clothing(item["id"])
+                                            st.rerun()
 
 
 # ---------- Подбор образа ----------
