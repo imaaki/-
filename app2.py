@@ -1030,7 +1030,7 @@ else:
 
         if saved_items:
             show_outfit(saved_items)
-else:
+        else:
             st.write("Вещи из этого образа уже удалены из гардероба.")
 
         with st.expander("Редактировать образ"):
