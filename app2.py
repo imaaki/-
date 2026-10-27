@@ -997,7 +997,7 @@ elif page == "Пора надеть":
 
 # ---------- Сохранённые образы ----------
 elif page == "Мои образы":
-    st.title("Мои образы")
+        st.title("Мои образы")
 
     outfits = get_outfits()
     if not outfits:
@@ -1005,19 +1005,19 @@ elif page == "Мои образы":
             "Сохранённых образов пока нет. Создай их в разделе "
             "«Подобрать образ»."
         )
-    else:
+else:
         clothes_by_id = {item["id"]: item for item in clothes}
 
-       labels = {
-    f"{item['name']} — {item['color']} ({item['category']}) · ID {item['id']}":
-    item["id"]
-    for item in clothes
-    }
-for outfit in outfits:
-    with st.container(border=True):
-        st.subheader(outfit["name"])
-        st.caption(f"Создан: {outfit['created_at']}")
+        labels = {
+            f"{item['name']} — {item['color']} ({item['category']}) · ID {item['id']}":
+            item["id"]
+            for item in clothes
+        }
 
+        for outfit in outfits:
+            with st.container(border=True):
+                st.subheader(outfit["name"])
+                st.caption(f"Создан: {outfit['created_at']}")
         item_ids = [
             int(value)
             for value in outfit["item_ids"].split(",")
@@ -1031,7 +1031,7 @@ for outfit in outfits:
 
         if saved_items:
             show_outfit(saved_items)
-        else:
+else:
             st.write("Вещи из этого образа уже удалены из гардероба.")
 
         with st.expander("Редактировать образ"):
