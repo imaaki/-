@@ -169,7 +169,9 @@ def get_clothes():
 def get_outfits():
     with connect_db() as conn:
         conn.row_factory = sqlite3.Row
-        return conn.execute("SELECT * FROM outfits ORDER BY id DESC").fetchall()
+        return conn.execute(
+            "SELECT * FROM outfits ORDER BY id DESC"
+        ).fetchall()
 
 
 def save_photo(uploaded_file):
@@ -999,17 +1001,18 @@ elif page == "Пора надеть":
 elif page == "Мои образы":
     st.title("Мои образы")
     outfits = get_outfits()
+
     if not outfits:
         st.info(
             "Сохранённых образов пока нет. Создай их в разделе "
             "«Подобрать образ»."
         )
-else:
+    else:
         clothes_by_id = {item["id"]: item for item in clothes}
 
         labels = {
-            f"{item['name']} — {item['color']} ({item['category']}) · ID {item['id']}":
-            item["id"]
+            f"{item['name']} — {item['color']} "
+            f"({item['category']}) · ID {item['id']}": item["id"]
             for item in clothes
         }
 
@@ -1017,68 +1020,72 @@ else:
             with st.container(border=True):
                 st.subheader(outfit["name"])
                 st.caption(f"Создан: {outfit['created_at']}")
-        item_ids = [
-            int(value)
-            for value in outfit["item_ids"].split(",")
-            if value
-        ]
-        saved_items = [
-            clothes_by_id[item_id]
-            for item_id in item_ids
-            if item_id in clothes_by_id
-        ]
 
-        if saved_items:
-            show_outfit(saved_items)
-        else:
-            st.write("Вещи из этого образа уже удалены из гардероба.")
-
-        with st.expander("Редактировать образ"):
-            with st.form(f"edit_outfit_{outfit['id']}"):
-                edited_outfit_name = st.text_input(
-                    "Название образа",
-                    value=outfit["name"],
-                    key=f"edit_outfit_name_{outfit['id']}",
-                )
-
-                current_labels = [
-                    label
-                    for label, clothing_id in labels.items()
-                    if clothing_id in item_ids
+                item_ids = [
+                    int(value)
+                    for value in outfit["item_ids"].split(",")
+                    if value
                 ]
 
-                selected_labels = st.multiselect(
-                    "Вещи в образе",
-                    options=list(labels.keys()),
-                    default=current_labels,
-                    key=f"edit_outfit_items_{outfit['id']}",
-                )
+                saved_items = [
+                    clothes_by_id[item_id]
+                    for item_id in item_ids
+                    if item_id in clothes_by_id
+                ]
 
-                save_outfit_edit = st.form_submit_button(
-                    "Сохранить образ"
-                )
+                if saved_items:
+                    show_outfit(saved_items)
+                else:
+                    st.write(
+                        "Вещи из этого образа уже удалены из гардероба."
+                    )
 
-                if save_outfit_edit:
-                    selected_ids = [
-                        labels[label] for label in selected_labels
-                    ]
-
-                    if not edited_outfit_name.strip():
-                        st.error("Укажи название образа.")
-                    elif len(selected_ids) < 2:
-                        st.error("Выбери минимум две вещи.")
-                    else:
-                        update_outfit(
-                            outfit["id"],
-                            edited_outfit_name,
-                            selected_ids,
+                with st.expander("Редактировать образ"):
+                    with st.form(f"edit_outfit_{outfit['id']}"):
+                        edited_outfit_name = st.text_input(
+                            "Название образа",
+                            value=outfit["name"],
+                            key=f"edit_outfit_name_{outfit['id']}",
                         )
-                        st.success("Образ обновлён.")
-                        st.rerun()
 
-        if st.button(
-            "Удалить образ",
-            key=f"delete_outfit_{outfit['id']}",
-        ):
-            delete_outfit(outfit["id"])
-            st.rerun()
+                        current_labels = [
+                            label
+                            for label, clothing_id in labels.items()
+                            if clothing_id in item_ids
+                        ]
+
+                        selected_labels = st.multiselect(
+                            "Вещи в образе",
+                            options=list(labels.keys()),
+                            default=current_labels,
+                            key=f"edit_outfit_items_{outfit['id']}",
+                        )
+
+                        save_outfit_edit = st.form_submit_button(
+                            "Сохранить образ"
+                        )
+
+                        if save_outfit_edit:
+                            selected_ids = [
+                                labels[label] for label in selected_labels
+                            ]
+
+                            if not edited_outfit_name.strip():
+                                st.error("Укажи название образа.")
+                            elif len(selected_ids) < 2:
+                                st.error("Выбери минимум две вещи.")
+                            else:
+                                update_outfit(
+                                    outfit["id"],
+                                    edited_outfit_name,
+                                    selected_ids,
+                                )
+                                st.success("Образ обновлён.")
+                                st.rerun()
+
+                if st.button(
+                    "Удалить образ",
+                    key=f"delete_outfit_{outfit['id']}",
+                ):
+                    delete_outfit(outfit["id"])
+                    st.rerun()
