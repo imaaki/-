@@ -232,9 +232,16 @@ def delete_clothing(item_id):
 
 
 def save_outfit(name, item_ids):
-
-    
-def update_clothing(
+    with connect_db() as conn:
+        conn.execute(
+            "INSERT INTO outfits (name, item_ids, created_at) VALUES (?, ?, ?)",
+            (
+                name.strip(),
+                ",".join(map(str, item_ids)),
+                date.today().isoformat(),
+            ),
+        )
+ def update_clothing(
     item_id, name, category, color, season, notes, occasions, new_photo_path=None
 ):
     """Обновляет вещь. Если новое фото не загружено, старое остаётся."""
