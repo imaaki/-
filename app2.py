@@ -997,8 +997,7 @@ elif page == "Пора надеть":
 
 # ---------- Сохранённые образы ----------
 elif page == "Мои образы":
-        st.title("Мои образы")
-
+    st.title("Мои образы")
     outfits = get_outfits()
     if not outfits:
         st.info(
