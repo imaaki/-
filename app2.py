@@ -232,7 +232,9 @@ def delete_clothing(item_id):
 
 
 def save_outfit(name, item_ids):
-    def update_clothing(
+
+    
+def update_clothing(
     item_id, name, category, color, season, notes, occasions, new_photo_path=None
 ):
     """Обновляет вещь. Если новое фото не загружено, старое остаётся."""
