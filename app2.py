@@ -1,1081 +1,604 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
 import sqlite3
-import uuid
-from datetime import date
-from itertools import product
-from pathlib import Path
+import hashlib
+from datetime import datetime
 
-import streamlit  as st
+# ---------- ЦВЕТОВАЯ ПАЛИТРА ----------
+PLUM = "#5B2C4F"        # сливовый
+CHERRY = "#8B1E3F"      # вишнёвый
+BUTTER = "#F5E6A8"      # светло-жёлтый (масло)
+CREAM = "#FFF8E7"
+TEXT_DARK = "#2B1B26"
 
-# ---------- РќР°СЃС‚СЂРѕР№РєРё РїСЂРѕРµРєС‚Р° ----------
-APP_DIR = Path(__file__).parent
-DB_PATH = APP_DIR / "wardrobe.db"
-UPLOAD_DIR = APP_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
-
-CATEGORIES = [
-    "Р’РµСЂС…",
-    "РќРёР·",
-    "РџР»Р°С‚СЊРµ / РєРѕРјР±РёРЅРµР·РѕРЅ",
-    "РћР±СѓРІСЊ",
-    "Р’РµСЂС…РЅСЏСЏ РѕРґРµР¶РґР°",
-    "РђРєСЃРµСЃСЃСѓР°СЂ",
-    "Р”СЂСѓРіРѕРµ",
-]
-SEASONS = ["Р’СЃРµСЃРµР·РѕРЅРЅР°СЏ", "Р’РµСЃРЅР°", "Р›РµС‚Рѕ", "РћСЃРµРЅСЊ", "Р—РёРјР°"]
-OCCASIONS = ["РџРѕРІСЃРµРґРЅРµРІРЅС‹Р№", "РЈС‡С‘Р±Р° / СЂР°Р±РѕС‚Р°", "РџСЂР°Р·РґРЅРёРє", "РЎРїРѕСЂС‚", "РџСЂРѕРіСѓР»РєР°"]
+FONT_TITLE = ("Georgia", 20, "bold")
+FONT_HEAD = ("Georgia", 14, "bold")
+FONT_BODY = ("Georgia", 11)
+FONT_BTN = ("Georgia", 11, "bold")
 
 
-CREAM = "#F7F3F7"       
-PLUM = "#4B3152"        
-CHERRY = "#963B55"      
-BUTTER = "#F2DE93"     
-INK = "#2D2430"         
-SIDEBAR = "#E9E1EB"    
-SURFACE = "#FFFFFF"    
-BORDER = "#D8CBDC"     
+# ---------- БАЗА ДАННЫХ ----------
+class DB:
+    def __init__(self, path="wardrobe.db"):
+        self.conn = sqlite3.connect(path)
+        self.conn.row_factory = sqlite3.Row
+        self._create()
 
-st.markdown(
-    f"""
-    <style>
-      .stApp,
-      [data-testid="stAppViewContainer"] {{
-        background: {CREAM};
-        color: {INK};
-      }}
+    def _create(self):
+        c = self.conn.cursor()
+        c.execute("""CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            style TEXT DEFAULT '',
+            season TEXT DEFAULT '',
+            color_pref TEXT DEFAULT ''
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS clothes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT,
+            color TEXT,
+            season TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS wishlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            item TEXT NOT NULL,
+            price TEXT,
+            note TEXT
+        )""")
+        self.conn.commit()
 
-      [data-testid="stSidebar"] {{
-        background: {SIDEBAR};
-      }}
+    @staticmethod
+    def hash_pw(pw):
+        return hashlib.sha256(pw.encode()).hexdigest()
 
-      h1, h2, h3, h4,
-      [data-testid="stMarkdownContainer"],
-      [data-testid="stCaptionContainer"] {{
-        color: {INK};
-      }}
-
-      /* РџРѕР»СЏ РІРІРѕРґР° вЂ” СЃРІРµС‚Р»С‹Р№ С„РѕРЅ, С‚С‘РјРЅС‹Р№ С‚РµРєСЃС‚ */
-      input, textarea,
-      [data-baseweb="select"] > div {{
-        background: {SURFACE} !important;
-        color: {INK} !important;
-        border-color: {BORDER} !important;
-      }}
-
-      input::placeholder,
-      textarea::placeholder {{
-        color: #716676 !important;
-        opacity: 1;
-      }}
-
-      /* РљРЅРѕРїРєРё */
-      div.stButton > button,
-      div.stFormSubmitButton > button {{
-        background: {PLUM};
-        color: #FFFFFF;
-        border: 0;
-        border-radius: 10px;
-        padding: 0.55rem 1rem;
-        font-weight: 600;
-      }}
-
-      div.stButton > button:hover,
-      div.stFormSubmitButton > button:hover {{
-        background: {CHERRY};
-        color: #FFFFFF;
-      }}
-
-      /* Р¤РѕСЂРјС‹ Рё РєР°СЂС‚РѕС‡РєРё */
-      div[data-testid="stForm"],
-      [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: {SURFACE};
-        border: 1px solid {BORDER};
-        border-radius: 14px;
-      }}
-
-      .hero {{
-        background: {PLUM};
-        color: #FFFFFF;
-        padding: 1.5rem 1.7rem;
-        border-radius: 18px;
-        margin-bottom: 1rem;
-      }}
-
-      .hero h1, .hero p {{
-        color: #FFFFFF;
-      }}
-
-      .tag {{
-        display: inline-block;
-        background: {BUTTER};
-        color: {INK};
-        padding: 0.2rem 0.6rem;
-        border-radius: 99px;
-        font-size: 0.85rem;
-      }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-# ---------- Р‘Р°Р·Р° РґР°РЅРЅС‹С… ----------
-def connect_db():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
-
-
-def init_db():
-    with connect_db() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS clothes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                category TEXT NOT NULL,
-                color TEXT NOT NULL,
-                season TEXT NOT NULL,
-                notes TEXT DEFAULT '',
-                photo_path TEXT DEFAULT '',
-                date_added TEXT NOT NULL,
-                last_worn TEXT,
-                occasions TEXT DEFAULT ''
+    def register(self, username, password, style, season, color_pref):
+        try:
+            self.conn.execute(
+                "INSERT INTO users(username,password,style,season,color_pref) VALUES(?,?,?,?,?)",
+                (username, self.hash_pw(password), style, season, color_pref),
             )
-            """
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def login(self, username, password):
+        row = self.conn.execute(
+            "SELECT * FROM users WHERE username=? AND password=?",
+            (username, self.hash_pw(password)),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def add_cloth(self, user_id, name, category, color, season):
+        self.conn.execute(
+            "INSERT INTO clothes(user_id,name,category,color,season) VALUES(?,?,?,?,?)",
+            (user_id, name, category, color, season),
         )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS outfits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                item_ids TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(clothes)").fetchall()
-        }
-        if "occasions" not in columns:
-            conn.execute(
-                "ALTER TABLE clothes ADD COLUMN occasions TEXT DEFAULT ''"
-            )
+        self.conn.commit()
 
-
-def get_clothes():
-    with connect_db() as conn:
-        conn.row_factory = sqlite3.Row
-        return conn.execute("SELECT * FROM clothes ORDER BY id DESC").fetchall()
-
-
-def get_outfits():
-    with connect_db() as conn:
-        conn.row_factory = sqlite3.Row
-        return conn.execute(
-            "SELECT * FROM outfits ORDER BY id DESC"
+    def list_clothes(self, user_id):
+        return self.conn.execute(
+            "SELECT * FROM clothes WHERE user_id=? ORDER BY category, name", (user_id,)
         ).fetchall()
 
+    def delete_cloth(self, cloth_id):
+        self.conn.execute("DELETE FROM clothes WHERE id=?", (cloth_id,))
+        self.conn.commit()
 
-def save_photo(uploaded_file):
-    if uploaded_file is None:
-        return ""
-
-    suffix = Path(uploaded_file.name).suffix.lower()
-    if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
-        suffix = ".jpg"
-
-    filename = f"{uuid.uuid4().hex}{suffix}"
-    path = UPLOAD_DIR / filename
-    path.write_bytes(uploaded_file.getvalue())
-    return str(path)
-
-
-def add_clothing(name, category, color, season, notes, photo_path, occasions):
-    with connect_db() as conn:
-        conn.execute(
-            """
-            INSERT INTO clothes
-            (name, category, color, season, notes, photo_path,
-             date_added, last_worn, occasions)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                name.strip(),
-                category,
-                color.strip(),
-                season,
-                notes.strip(),
-                photo_path,
-                date.today().isoformat(),
-                None,
-                ", ".join(occasions),
-            ),
+    def add_wish(self, user_id, item, price, note):
+        self.conn.execute(
+            "INSERT INTO wishlist(user_id,item,price,note) VALUES(?,?,?,?)",
+            (user_id, item, price, note),
         )
+        self.conn.commit()
+
+    def list_wishes(self, user_id):
+        return self.conn.execute(
+            "SELECT * FROM wishlist WHERE user_id=? ORDER BY id DESC", (user_id,)
+        ).fetchall()
+
+    def delete_wish(self, wish_id):
+        self.conn.execute("DELETE FROM wishlist WHERE id=?", (wish_id,))
+        self.conn.commit()
 
 
-def mark_worn(item_id):
-    with connect_db() as conn:
-        conn.execute(
-            "UPDATE clothes SET last_worn = ? WHERE id = ?",
-            (date.today().isoformat(), item_id),
-        )
+db = DB()
 
 
-def delete_clothing(item_id):
-    with connect_db() as conn:
-        row = conn.execute(
-            "SELECT photo_path FROM clothes WHERE id = ?", (item_id,)
-        ).fetchone()
-        conn.execute("DELETE FROM clothes WHERE id = ?", (item_id,))
-
-    if row and row[0]:
-        try:
-            Path(row[0]).unlink(missing_ok=True)
-        except OSError:
-            pass
+# ---------- ВСПОМОГАТЕЛЬНЫЕ ----------
+def styled_button(parent, text, command, bg=CHERRY, fg=BUTTER):
+    return tk.Button(
+        parent, text=text, command=command,
+        bg=bg, fg=fg, activebackground=PLUM, activeforeground=BUTTER,
+        font=FONT_BTN, relief="flat", bd=0, padx=14, pady=8, cursor="hand2",
+    )
 
 
-def save_outfit(name, item_ids):
-    with connect_db() as conn:
-        conn.execute(
-            "INSERT INTO outfits (name, item_ids, created_at) VALUES (?, ?, ?)",
-            (
-                name.strip(),
-                ",".join(map(str, item_ids)),
-                date.today().isoformat(),
-            ),
-        )
-def update_clothing(
-    item_id, name, category, color, season, notes, occasions, new_photo_path=None
-):
-    """РћР±РЅРѕРІР»СЏРµС‚ РІРµС‰СЊ. Р•СЃР»Рё РЅРѕРІРѕРµ С„РѕС‚Рѕ РЅРµ Р·Р°РіСЂСѓР¶РµРЅРѕ, СЃС‚Р°СЂРѕРµ РѕСЃС‚Р°С‘С‚СЃСЏ."""
-    with connect_db() as conn:
-        old_photo = conn.execute(
-            "SELECT photo_path FROM clothes WHERE id = ?", (item_id,)
-        ).fetchone()
+def styled_entry(parent, show=None):
+    e = tk.Entry(
+        parent, font=FONT_BODY, bg=CREAM, fg=TEXT_DARK,
+        insertbackground=TEXT_DARK, relief="flat", bd=4, show=show,
+    )
+    return e
 
-        if new_photo_path is None:
-            conn.execute(
-                """
-                UPDATE clothes
-                SET name = ?, category = ?, color = ?, season = ?,
-                    notes = ?, occasions = ?
-                WHERE id = ?
-                """,
-                (
-                    name.strip(), category, color.strip(), season,
-                    notes.strip(), ", ".join(occasions), item_id,
-                ),
-            )
+
+def clear_frame(frame):
+    for w in frame.winfo_children():
+        w.destroy()
+
+
+# ---------- ЭКРАН ВХОДА ----------
+class AuthScreen(tk.Frame):
+    def __init__(self, app):
+        super().__init__(app, bg=BUTTER)
+        self.app = app
+        self.build()
+
+    def build(self):
+        clear_frame(self)
+        tk.Label(self, text="🌸 Умный шкаф", font=("Georgia", 30, "bold"),
+                 bg=BUTTER, fg=PLUM).pack(pady=(60, 10))
+        tk.Label(self, text="Твой персональный стилист",
+                 font=("Georgia", 13, "italic"), bg=BUTTER, fg=CHERRY).pack(pady=(0, 30))
+
+        card = tk.Frame(self, bg=CREAM, bd=0, highlightthickness=2,
+                        highlightbackground=PLUM)
+        card.pack(padx=40, pady=10, fill="x")
+
+        tk.Label(card, text="Имя пользователя", font=FONT_BODY,
+                 bg=CREAM, fg=TEXT_DARK).pack(anchor="w", padx=20, pady=(18, 4))
+        self.e_user = styled_entry(card)
+        self.e_user.pack(padx=20, fill="x")
+
+        tk.Label(card, text="Пароль", font=FONT_BODY,
+                 bg=CREAM, fg=TEXT_DARK).pack(anchor="w", padx=20, pady=(12, 4))
+        self.e_pw = styled_entry(card, show="•")
+        self.e_pw.pack(padx=20, fill="x")
+
+        btns = tk.Frame(card, bg=CREAM)
+        btns.pack(pady=20)
+        styled_button(btns, "Войти", self.on_login).pack(side="left", padx=6)
+        styled_button(btns, "Регистрация", self.on_register, bg=PLUM).pack(side="left", padx=6)
+
+    def on_login(self):
+        u = self.e_user.get().strip()
+        p = self.e_pw.get()
+        if not u or not p:
+            messagebox.showwarning("Внимание", "Заполни все поля")
+            return
+        user = db.login(u, p)
+        if user:
+            self.app.current_user = user
+            self.app.show_main()
         else:
-            conn.execute(
-                """
-                UPDATE clothes
-                SET name = ?, category = ?, color = ?, season = ?,
-                    notes = ?, occasions = ?, photo_path = ?
-                WHERE id = ?
-                """,
-                (
-                    name.strip(), category, color.strip(), season,
-                    notes.strip(), ", ".join(occasions),
-                    new_photo_path, item_id,
-                ),
-            )
+            messagebox.showerror("Ошибка", "Неверное имя или пароль")
 
-    if new_photo_path and old_photo and old_photo[0]:
-        try:
-            Path(old_photo[0]).unlink(missing_ok=True)
-        except OSError:
-            pass
+    def on_register(self):
+        reg = RegisterWindow(self.app)
+        reg.grab_set()
 
 
-def update_outfit(outfit_id, name, item_ids):
-    with connect_db() as conn:
-        conn.execute(
-            "UPDATE outfits SET name = ?, item_ids = ? WHERE id = ?",
-            (
-                name.strip(),
-                ",".join(map(str, item_ids)),
-                outfit_id,
-            ),
-        )
+class RegisterWindow(tk.Toplevel):
+    def __init__(self, app):
+        super().__init__(app, bg=BUTTER)
+        self.app = app
+        self.title("Регистрация")
+        self.geometry("420x560")
+        self.build()
 
+    def build(self):
+        tk.Label(self, text="Создать профиль", font=FONT_TITLE,
+                 bg=BUTTER, fg=PLUM).pack(pady=16)
 
-def delete_outfit(outfit_id):
-    with connect_db() as conn:
-        conn.execute(
-            "DELETE FROM outfits WHERE id = ?",
-            (outfit_id,),
-        )
-
-# ---------- РџРѕРґР±РѕСЂ РїРѕ С†РІРµС‚Р°Рј ----------
-COLOR_GROUPS = {
-    "РЅРµР№С‚СЂР°Р»СЊРЅС‹Р№": [
-        "Р±РµР»", "С‡С‘СЂРЅ", "С‡РµСЂРЅ", "СЃРµСЂ", "Р±РµР¶", "РєСЂРµРј",
-        "РјРѕР»РѕС‡", "РєРѕСЂРёС‡РЅРµРІ", "РєРѕСЂРёС‡РЅ",
-    ],
-    "СЃРёРЅРёР№": ["СЃРёРЅ", "РіРѕР»СѓР±", "РґР¶РёРЅСЃ", "РґРµРЅРёРј"],
-    "Р·РµР»С‘РЅС‹Р№": ["Р·РµР»С‘РЅ", "Р·РµР»РµРЅ", "РѕР»РёРІ", "С…Р°РєРё", "РјСЏС‚"],
-    "РєСЂР°СЃРЅС‹Р№": ["РєСЂР°СЃРЅ", "Р±РѕСЂРґРѕРІ", "РІРёС€РЅ", "РјР°СЂСЃР°Р»"],
-    "СЂРѕР·РѕРІС‹Р№": ["СЂРѕР·РѕРІ", "РїСѓРґСЂРѕРІ"],
-    "Р¶С‘Р»С‚С‹Р№": ["Р¶С‘Р»С‚", "Р¶РµР»С‚", "РіРѕСЂС‡РёС‡"],
-    "С„РёРѕР»РµС‚РѕРІС‹Р№": ["С„РёРѕР»РµС‚", "Р»РёР»РѕРІ", "СЃР»РёРІРѕРІ"],
-}
-
-
-def color_group(color):
-    value = color.casefold().strip()
-    for group, words in COLOR_GROUPS.items():
-        if any(word in value for word in words):
-            return group
-    return value
-
-
-def colors_compatible(color_a, color_b):
-    """РџСЂРѕСЃС‚Р°СЏ СЌРІСЂРёСЃС‚РёРєР°, Р° РЅРµ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєР°СЏ РѕС†РµРЅРєР° СЃС‚РёР»СЏ."""
-    group_a = color_group(color_a)
-    group_b = color_group(color_b)
-
-    if group_a == group_b:
-        return True
-
-    if group_a == "РЅРµР№С‚СЂР°Р»СЊРЅС‹Р№" or group_b == "РЅРµР№С‚СЂР°Р»СЊРЅС‹Р№":
-        return True
-
-    friendly_pairs = {
-        frozenset(("СЃРёРЅРёР№", "РєРѕСЂРёС‡РЅРµРІС‹Р№")),
-        frozenset(("СЃРёРЅРёР№", "Р¶С‘Р»С‚С‹Р№")),
-        frozenset(("Р·РµР»С‘РЅС‹Р№", "РєРѕСЂРёС‡РЅРµРІС‹Р№")),
-        frozenset(("Р·РµР»С‘РЅС‹Р№", "Р¶С‘Р»С‚С‹Р№")),
-        frozenset(("РєСЂР°СЃРЅС‹Р№", "СЃРёРЅРёР№")),
-        frozenset(("СЂРѕР·РѕРІС‹Р№", "С„РёРѕР»РµС‚РѕРІС‹Р№")),
-    }
-    return frozenset((group_a, group_b)) in friendly_pairs
-
-
-def same_color_family(color_a, color_b):
-    return color_group(color_a) == color_group(color_b)
-def fits_occasion(item, occasion):
-    """Р’РµС‰Рё Р±РµР· СѓРєР°Р·Р°РЅРЅРѕРіРѕ РїРѕРІРѕРґР° СЃС‡РёС‚Р°СЋС‚СЃСЏ РїРѕРґС…РѕРґСЏС‰РёРјРё РґР»СЏ Р»СЋР±РѕРіРѕ РїРѕРІРѕРґР°."""
-    item_occasions = [
-        value.strip()
-        for value in (item["occasions"] or "").split(",")
-        if value.strip()
-    ]
-    return not item_occasions or occasion in item_occasions
-
-
-def suggest_outfits(clothes, occasion, target_item=None, limit=3):
-    """
-    РЎРѕР±РёСЂР°РµС‚ РїСЂРѕСЃС‚С‹Рµ РІР°СЂРёР°РЅС‚С‹:
-    РІРµСЂС… + РЅРёР· (+ РѕР±СѓРІСЊ) РёР»Рё РїР»Р°С‚СЊРµ (+ РѕР±СѓРІСЊ).
-    Р”Р»СЏ РЅР°РїРѕРјРёРЅР°РЅРёСЏ СЃС‚Р°СЂР°РµС‚СЃСЏ РІРєР»СЋС‡РёС‚СЊ РІС‹Р±СЂР°РЅРЅСѓСЋ Р·Р°Р±С‹С‚СѓСЋ РІРµС‰СЊ.
-    """
-    candidates = [
-        item for item in clothes
-        if fits_occasion(item, occasion)
-    ]
-
-    if target_item is not None:
-        candidates = [
-            item for item in candidates
-            if item["id"] != target_item["id"]
+        fields = [
+            ("Имя пользователя", "user"),
+            ("Пароль", "pw"),
+            ("Твой стиль (напр.: casual, business)", "style"),
+            ("Любимый сезон (весна/лето/осень/зима)", "season"),
+            ("Любимые цвета", "colors"),
         ]
+        self.entries = {}
+        for label, key in fields:
+            tk.Label(self, text=label, font=FONT_BODY,
+                     bg=BUTTER, fg=TEXT_DARK).pack(anchor="w", padx=30)
+            e = styled_entry(self, show="•" if key == "pw" else None)
+            e.pack(padx=30, pady=(2, 12), fill="x")
+            self.entries[key] = e
 
-    tops = [item for item in candidates if item["category"] == "Р’РµСЂС…"]
-    bottoms = [item for item in candidates if item["category"] == "РќРёР·"]
-    dresses = [
-        item for item in candidates
-        if item["category"] == "РџР»Р°С‚СЊРµ / РєРѕРјР±РёРЅРµР·РѕРЅ"
-    ]
-    shoes = [item for item in candidates if item["category"] == "РћР±СѓРІСЊ"]
+        styled_button(self, "Готово", self.submit, bg=CHERRY).pack(pady=10)
 
-    results = []
-
-    if target_item is not None:
-        if target_item["category"] == "Р’РµСЂС…":
-            tops = [target_item]
-        elif target_item["category"] == "РќРёР·":
-            bottoms = [target_item]
-        elif target_item["category"] == "РџР»Р°С‚СЊРµ / РєРѕРјР±РёРЅРµР·РѕРЅ":
-            dresses = [target_item]
-        elif target_item["category"] == "РћР±СѓРІСЊ":
-            shoes = [target_item]
+    def submit(self):
+        u = self.entries["user"].get().strip()
+        p = self.entries["pw"].get()
+        if not u or not p:
+            messagebox.showwarning("Внимание", "Имя и пароль обязательны")
+            return
+        ok = db.register(
+            u, p,
+            self.entries["style"].get().strip(),
+            self.entries["season"].get().strip(),
+            self.entries["colors"].get().strip(),
+        )
+        if ok:
+            messagebox.showinfo("Успех", "Профиль создан! Теперь войди.")
+            self.destroy()
         else:
+            messagebox.showerror("Ошибка", "Такое имя уже существует")
 
-            candidates = [
-                item for item in candidates
-                if item["category"] in {"Р’РµСЂС…", "РќРёР·", "РћР±СѓРІСЊ",
-                                        "РџР»Р°С‚СЊРµ / РєРѕРјР±РёРЅРµР·РѕРЅ"}
-            ]
 
-    for top, bottom in product(tops, bottoms):
-        if top["id"] == bottom["id"]:
-            continue
-        if not colors_compatible(top["color"], bottom["color"]):
-            continue
+# ---------- ГЛАВНЫЙ ЭКРАН ----------
+class MainScreen(tk.Frame):
+    def __init__(self, app):
+        super().__init__(app, bg=BUTTER)
+        self.app = app
+        self.build()
 
-        outfit = [top, bottom]
-        matching_shoes = [
-            shoe for shoe in shoes
-            if colors_compatible(shoe["color"], top["color"])
-            and colors_compatible(shoe["color"], bottom["color"])
+    def build(self):
+        clear_frame(self)
+        user = self.app.current_user
+
+        # Шапка
+        head = tk.Frame(self, bg=PLUM)
+        head.pack(fill="x")
+        tk.Label(head, text=f"👗 {user['username']}", font=FONT_TITLE,
+                 bg=PLUM, fg=BUTTER).pack(side="left", padx=20, pady=12)
+        styled_button(head, "Выйти", self.logout, bg=CHERRY).pack(side="right", padx=15, pady=10)
+
+        # Приветствие с персональными данными
+        info = tk.Frame(self, bg=CREAM, highlightthickness=1, highlightbackground=PLUM)
+        info.pack(fill="x", padx=20, pady=15)
+        tk.Label(info, text="Твой профиль", font=FONT_HEAD,
+                 bg=CREAM, fg=CHERRY).pack(anchor="w", padx=15, pady=(10, 4))
+        style = user.get("style") or "не указан"
+        season = user.get("season") or "не указан"
+        colors = user.get("color_pref") or "не указаны"
+        tk.Label(info, text=f"Стиль: {style}   •   Сезон: {season}   •   Цвета: {colors}",
+                 font=FONT_BODY, bg=CREAM, fg=TEXT_DARK).pack(anchor="w", padx=15, pady=(0, 12))
+
+        # Меню кнопок
+        menu = tk.Frame(self, bg=BUTTER)
+        menu.pack(pady=20)
+        buttons = [
+            ("🧺  Мой гардероб", self.open_wardrobe),
+            ("✨  Подбор образа", self.open_outfit),
+            ("🛍  Помощь перед покупкой", self.open_shopping),
         ]
-        if matching_shoes:
-            outfit.append(matching_shoes[0])
+        for i, (txt, cmd) in enumerate(buttons):
+            b = styled_button(menu, txt, cmd, bg=CHERRY)
+            b.config(font=("Georgia", 13, "bold"), width=26, pady=18)
+            b.grid(row=0, column=i, padx=12)
 
-        if target_item is not None and target_item["id"] not in {
-            item["id"] for item in outfit
-        }:
-            if colors_compatible(target_item["color"], top["color"]):
-                outfit.append(target_item)
-            elif colors_compatible(target_item["color"], bottom["color"]):
-                outfit.append(target_item)
-            else:
-                continue
+        # Декор снизу
+        tk.Label(self, text="С любовью к твоему стилю 💐",
+                 font=("Georgia", 12, "italic"), bg=BUTTER, fg=PLUM).pack(side="bottom", pady=20)
 
-        results.append(outfit)
+    def logout(self):
+        self.app.current_user = None
+        self.app.show_auth()
 
-    for dress in dresses:
-        outfit = [dress]
-        matching_shoes = [
-            shoe for shoe in shoes
-            if colors_compatible(shoe["color"], dress["color"])
-        ]
-        if matching_shoes:
-            outfit.append(matching_shoes[0])
+    def open_wardrobe(self):
+        self.app.show(WardrobeScreen(self.app))
 
-        if target_item is not None and target_item["id"] not in {
-            item["id"] for item in outfit
-        }:
-            if colors_compatible(target_item["color"], dress["color"]):
-                outfit.append(target_item)
-            else:
-                continue
+    def open_outfit(self):
+        self.app.show(OutfitScreen(self.app))
 
-        results.append(outfit)
-
-    unique_results = []
-    seen = set()
-    for outfit in results:
-        key = tuple(sorted(item["id"] for item in outfit))
-        if key not in seen:
-            seen.add(key)
-            unique_results.append(outfit)
-
-    return unique_results[:limit]
+    def open_shopping(self):
+        self.app.show(ShoppingScreen(self.app))
 
 
-def days_since_last_worn(item):
-    last_worn = item["last_worn"] or item["date_added"]
-    return (date.today() - date.fromisoformat(last_worn)).days
+# ---------- ГАРДЕРОБ ----------
+class WardrobeScreen(tk.Frame):
+    def __init__(self, app):
+        super().__init__(app, bg=BUTTER)
+        self.app = app
+        self.build()
+
+    def build(self):
+        clear_frame(self)
+        user = self.app.current_user
+
+        head = tk.Frame(self, bg=PLUM)
+        head.pack(fill="x")
+        styled_button(head, "← Назад", self.app.show_main, bg=CHERRY).pack(side="left", padx=15, pady=10)
+        tk.Label(head, text="Мой гардероб", font=FONT_TITLE,
+                 bg=PLUM, fg=BUTTER).pack(side="left", padx=10)
+
+        # Форма добавления
+        form = tk.Frame(self, bg=CREAM, highlightthickness=1, highlightbackground=PLUM)
+        form.pack(fill="x", padx=20, pady=12)
+
+        tk.Label(form, text="Добавить вещь", font=FONT_HEAD,
+                 bg=CREAM, fg=CHERRY).grid(row=0, column=0, columnspan=6,
+                                           sticky="w", padx=12, pady=8)
+
+        self.e_name = styled_entry(form); self.e_name.grid(row=1, column=0, padx=6, pady=6, sticky="ew")
+        self.e_name.insert(0, "Название")
+
+        self.cb_cat = ttk.Combobox(form, values=["Верх", "Низ", "Обувь", "Аксессуар", "Верхняя одежда", "Платье"],
+                                    font=FONT_BODY)
+        self.cb_cat.set("Верх"); self.cb_cat.grid(row=1, column=1, padx=6, pady=6, sticky="ew")
+
+        self.e_color = styled_entry(form); self.e_color.grid(row=1, column=2, padx=6, pady=6, sticky="ew")
+        self.e_color.insert(0, "Цвет")
+
+        self.cb_season = ttk.Combobox(form, values=["Весна", "Лето", "Осень", "Зима", "Всесезон"],
+                                       font=FONT_BODY)
+        self.cb_season.set("Всесезон"); self.cb_season.grid(row=1, column=3, padx=6, pady=6, sticky="ew")
+
+        styled_button(form, "+", self.add_item).grid(row=1, column=4, padx=8, pady=6)
+        for i in range(5):
+            form.columnconfigure(i, weight=1)
+
+        # Таблица вещей
+        self.tree = ttk.Treeview(self, columns=("name", "cat", "color", "season"),
+                                  show="headings", height=12)
+        self.tree.heading("name", text="Название")
+        self.tree.heading("cat", text="Категория")
+        self.tree.heading("color", text="Цвет")
+        self.tree.heading("season", text="Сезон")
+        self.tree.column("name", width=220)
+        self.tree.column("cat", width=140)
+        self.tree.column("color", width=120)
+        self.tree.column("season", width=120)
+        self.tree.pack(fill="both", expand=True, padx=20, pady=(0, 8))
+
+        bottom = tk.Frame(self, bg=BUTTER)
+        bottom.pack(fill="x", padx=20, pady=(0, 15))
+        styled_button(bottom, "Удалить выбранное", self.delete_item, bg=PLUM).pack(side="right")
+
+        self.refresh()
+
+    def add_item(self):
+        name = self.e_name.get().strip()
+        color = self.e_color.get().strip()
+        if not name or name == "Название":
+            messagebox.showwarning("Внимание", "Введите название вещи")
+            return
+        if not color or color == "Цвет":
+            color = "—"
+        db.add_cloth(self.app.current_user["id"], name, self.cb_cat.get(),
+                     color, self.cb_season.get())
+        self.e_name.delete(0, "end"); self.e_name.insert(0, "Название")
+        self.e_color.delete(0, "end"); self.e_color.insert(0, "Цвет")
+        self.refresh()
+
+    def delete_item(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showinfo("Подсказка", "Выберите вещь")
+            return
+        db.delete_cloth(sel[0])
+        self.refresh()
+
+    def refresh(self):
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        for r in db.list_clothes(self.app.current_user["id"]):
+            self.tree.insert("", "end", iid=r["id"],
+                             values=(r["name"], r["category"], r["color"], r["season"]))
 
 
-def show_photo(path, width=220):
-    if path and Path(path).exists():
-        st.image(path, width=width)
-    else:
-        st.caption(" Р¤РѕС‚Рѕ РЅРµ РґРѕР±Р°РІР»РµРЅРѕ")
+# ---------- ПОДБОР ОБРАЗА ----------
+class OutfitScreen(tk.Frame):
+    def __init__(self, app):
+        super().__init__(app, bg=BUTTER)
+        self.app = app
+        self.build()
 
+    def build(self):
+        clear_frame(self)
+        head = tk.Frame(self, bg=PLUM)
+        head.pack(fill="x")
+        styled_button(head, "← Назад", self.app.show_main, bg=CHERRY).pack(side="left", padx=15, pady=10)
+        tk.Label(head, text="Подбор образа", font=FONT_TITLE,
+                 bg=PLUM, fg=BUTTER).pack(side="left", padx=10)
 
-def show_outfit(outfit):
-    """РџРѕРєР°Р·С‹РІР°РµС‚ РєРѕРјРїР»РµРєС‚ РєР°СЂС‚РѕС‡РєР°РјРё СЃ С„РѕС‚РѕРіСЂР°С„РёСЏРјРё Рё РїРѕРґРїРёСЃСЏРјРё."""
-    if not outfit:
-        st.caption("Р’ СЌС‚РѕРј РѕР±СЂР°Р·Рµ РїРѕРєР° РЅРµС‚ РІРµС‰РµР№.")
-        return
+        info = tk.Frame(self, bg=CREAM, highlightthickness=1, highlightbackground=PLUM)
+        info.pack(fill="x", padx=20, pady=12)
+        tk.Label(info, text="Выбери сезон и повод — я соберу образ из твоих вещей.",
+                 font=FONT_BODY, bg=CREAM, fg=TEXT_DARK).pack(pady=10, padx=15, anchor="w")
 
+        controls = tk.Frame(self, bg=BUTTER)
+        controls.pack(pady=10)
 
-    for start in range(0, len(outfit), 3):
-        row_items = outfit[start:start + 3]
-        cols = st.columns(len(row_items))
+        tk.Label(controls, text="Сезон:", font=FONT_BODY, bg=BUTTER).grid(row=0, column=0, padx=6)
+        self.cb_season = ttk.Combobox(controls, values=["Весна", "Лето", "Осень", "Зима", "Всесезон"],
+                                       font=FONT_BODY, width=12)
+        self.cb_season.set("Всесезон"); self.cb_season.grid(row=0, column=1, padx=6)
 
-        for col, item in zip(cols, row_items):
-            with col:
-                photo_path = item["photo_path"]
+        tk.Label(controls, text="Повод:", font=FONT_BODY, bg=BUTTER).grid(row=0, column=2, padx=6)
+        self.cb_occasion = ttk.Combobox(controls, values=["Повседневный", "Работа", "Вечер", "Прогулка"],
+                                         font=FONT_BODY, width=14)
+        self.cb_occasion.set("Повседневный"); self.cb_occasion.grid(row=0, column=3, padx=6)
 
-                if photo_path and Path(photo_path).exists():
-                    st.image(photo_path, width=220)
-                else:
-                    st.info("Р”Р»СЏ СЌС‚РѕР№ РІРµС‰Рё РїРѕРєР° РЅРµС‚ С„РѕС‚Рѕ")
+        styled_button(controls, "Собрать образ ✨", self.make_outfit).grid(row=0, column=4, padx=15)
 
-                st.caption(
-                    f"**{item['name']}**\n\n"
-                    f"{item['category']} В· {item['color']}"
-                )
+        self.result = tk.Text(self, height=14, font=FONT_BODY, bg=CREAM, fg=TEXT_DARK,
+                              relief="flat", bd=8, wrap="word")
+        self.result.pack(fill="both", expand=True, padx=20, pady=15)
+        self.result.insert("end", "Здесь появится твой образ...")
+        self.result.config(state="disabled")
 
+    def make_outfit(self):
+        user_id = self.app.current_user["id"]
+        season = self.cb_season.get()
+        occasion = self.cb_occasion.get()
+        items = db.list_clothes(user_id)
 
+        if not items:
+            self.show_text("Гардероб пуст. Добавь вещи в разделе «Мой гардероб».")
+            return
 
-init_db()
-clothes = get_clothes()
+        # фильтр по сезону
+        def match_season(it):
+            return it["season"] in (season, "Всесезон", "")
 
-st.sidebar.markdown("## РЈРјРЅС‹Р№ С€РєР°С„")
-st.sidebar.caption("РўРІРѕР№ РіР°СЂРґРµСЂРѕР± вЂ” СЃ СѓРјРѕРј")
-page = st.sidebar.radio(
-    "Р Р°Р·РґРµР»",
-    [
-        "Р“Р»Р°РІРЅР°СЏ",
-        "РњРѕР№ РіР°СЂРґРµСЂРѕР±",
-        "РџРѕРґРѕР±СЂР°С‚СЊ РѕР±СЂР°Р·",
-        "РџРµСЂРµРґ РїРѕРєСѓРїРєРѕР№",
-        "РџРѕСЂР° РЅР°РґРµС‚СЊ",
-        "РњРѕРё РѕР±СЂР°Р·С‹",
-    ],
-)
-st.sidebar.markdown("---")
-st.sidebar.markdown(
-    f"<span class='tag'>Plum В· Cherry В· Butter</span>",
-    unsafe_allow_html=True,
-)
-st.sidebar.caption("Р”Р°РЅРЅС‹Рµ С…СЂР°РЅСЏС‚СЃСЏ РІ Р»РѕРєР°Р»СЊРЅРѕР№ Р±Р°Р·Рµ wardrobe.db")
+        tops = [i for i in items if i["category"] in ("Верх", "Платье") and match_season(i)]
+        bottoms = [i for i in items if i["category"] == "Низ" and match_season(i)]
+        shoes = [i for i in items if i["category"] == "Обувь" and match_season(i)]
+        acc = [i for i in items if i["category"] == "Аксессуар"]
+        outer = [i for i in items if i["category"] == "Верхняя одежда" and match_season(i)]
 
+        def pick(lst):
+            return lst[0] if lst else None
 
+        top = pick(tops); bottom = pick(bottoms)
+        shoe = pick(shoes); accessory = pick(acc); outerwear = pick(outer)
 
-if page == "Р“Р»Р°РІРЅР°СЏ":
-    st.markdown(
-        """
-        <div class="hero">
-          <h1>РўРІРѕР№ РіР°СЂРґРµСЂРѕР±. РўРІРѕРё СЂРµС€РµРЅРёСЏ.</h1>
-          <p>РЎРѕР±РёСЂР°Р№ РѕР±СЂР°Р·С‹, РІРѕР·РІСЂР°С‰Р°Р№ Р·Р°Р±С‹С‚С‹Рµ РІРµС‰Рё Рё РїРѕРєСѓРїР°Р№ РѕСЃРѕР·РЅР°РЅРЅРѕ.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    forgotten = [item for item in clothes if days_since_last_worn(item) >= 30]
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Р’РµС‰РµР№ РІ РіР°СЂРґРµСЂРѕР±Рµ", len(clothes))
-    c2.metric("Р”Р°РІРЅРѕ РЅРµ РЅР°РґРµРІР°Р»РёСЃСЊ", len(forgotten))
-    c3.metric("РЎРѕС…СЂР°РЅС‘РЅРЅС‹С… РѕР±СЂР°Р·РѕРІ", len(get_outfits()))
-
-    st.subheader("Р§С‚Рѕ СѓРјРµРµС‚ РїСЂРёР»РѕР¶РµРЅРёРµ")
-    col1, col2 = st.columns(2)
-    col1.info(
-        "**РњРѕР№ РіР°СЂРґРµСЂРѕР±**\n\n"
-        "Р”РѕР±Р°РІР»СЏР№ С„РѕС‚РѕРіСЂР°С„РёРё, РєР°С‚РµРіРѕСЂРёРё, С†РІРµС‚Р°, СЃРµР·РѕРЅС‹ Рё РїРѕРІРѕРґС‹."
-    )
-    col2.info(
-        "**РџРѕРґР±РѕСЂ РѕР±СЂР°Р·Р°**\n\n"
-        "РџРѕР»СѓС‡Р°Р№ РїСЂРѕСЃС‚С‹Рµ РІР°СЂРёР°РЅС‚С‹ СЃРѕС‡РµС‚Р°РЅРёР№ РёР· СѓР¶Рµ РґРѕР±Р°РІР»РµРЅРЅС‹С… РІРµС‰РµР№."
-    )
-    col3, col4 = st.columns(2)
-    col3.info(
-        "**РџРѕСЂР° РЅР°РґРµС‚СЊ**\n\n"
-        "РќР°С…РѕРґРё РІРµС‰Рё, РєРѕС‚РѕСЂС‹Рµ РґР°РІРЅРѕ РЅРµ РѕС‚РјРµС‡Р°Р»РёСЃСЊ РєР°Рє РЅР°РґРµС‚С‹Рµ."
-    )
-    col4.info(
-        "**РџРµСЂРµРґ РїРѕРєСѓРїРєРѕР№**\n\n"
-        "РџСЂРѕРІРµСЂСЏР№, РµСЃС‚СЊ Р»Рё РїРѕС…РѕР¶Р°СЏ РІРµС‰СЊ Рё СЃ С‡РµРј СЃРѕС‡РµС‚Р°С‚СЊ РѕР±РЅРѕРІРєСѓ."
-    )
-
-    if forgotten:
-        st.subheader("РњРѕР¶РЅРѕ РІРµСЂРЅСѓС‚СЊ РІ РѕР±СЂР°Р·С‹")
-        for item in forgotten[:3]:
-            st.write(
-                f"вЂў **{item['name']}** вЂ” "
-                f"{days_since_last_worn(item)} РґРЅ. Р±РµР· РѕС‚РјРµС‚РєРё Рѕ РЅРѕСЃРєРµ"
-            )
-
-
-
-elif page == "РњРѕР№ РіР°СЂРґРµСЂРѕР±":
-    st.title("РњРѕР№ РіР°СЂРґРµСЂРѕР±")
-    st.caption("Р”РѕР±Р°РІР»СЏР№ РІРµС‰Рё вЂ” С‚Р°Рє РїРѕРґСЃРєР°Р·РєРё РїСЂРёР»РѕР¶РµРЅРёСЏ СЃС‚Р°РЅСѓС‚ РїРѕР»РµР·РЅРµРµ.")
-
-    with st.expander("пј‹ Р”РѕР±Р°РІРёС‚СЊ РІРµС‰СЊ", expanded=(len(clothes) == 0)):
-        with st.form("add_clothing_form", clear_on_submit=True):
-            name = st.text_input(
-                "РќР°Р·РІР°РЅРёРµ РІРµС‰Рё *",
-                placeholder="РќР°РїСЂРёРјРµСЂ, Р±РµР»Р°СЏ СЂСѓР±Р°С€РєР°",
-            )
-            col1, col2 = st.columns(2)
-
-            with col1:
-                category = st.selectbox("РљР°С‚РµРіРѕСЂРёСЏ", CATEGORIES)
-                color = st.text_input(
-                    "РћСЃРЅРѕРІРЅРѕР№ С†РІРµС‚ *",
-                    placeholder="РќР°РїСЂРёРјРµСЂ, Р±РµР»С‹Р№",
-                )
-                season = st.selectbox("РЎРµР·РѕРЅ", SEASONS)
-
-            with col2:
-                photo = st.file_uploader(
-                    "Р¤РѕС‚РѕРіСЂР°С„РёСЏ",
-                    type=["jpg", "jpeg", "png", "webp"],
-                )
-                occasions = st.multiselect(
-                    "Р”Р»СЏ РєР°РєРёС… РїРѕРІРѕРґРѕРІ РїРѕРґС…РѕРґРёС‚",
-                    OCCASIONS,
-                )
-                notes = st.text_area(
-                    "Р—Р°РјРµС‚РєРё",
-                    placeholder="РњР°С‚РµСЂРёР°Р», СЃС‚РёР»СЊ, СЃ С‡РµРј СЃРѕС‡РµС‚Р°РµС‚СЃСЏвЂ¦",
-                )
-
-            submitted = st.form_submit_button("РЎРѕС…СЂР°РЅРёС‚СЊ РІРµС‰СЊ")
-
-            if submitted:
-                if not name.strip() or not color.strip():
-                    st.error("Р—Р°РїРѕР»РЅРё РЅР°Р·РІР°РЅРёРµ Рё С†РІРµС‚ РІРµС‰Рё.")
-                else:
-                    photo_path = save_photo(photo)
-                    add_clothing(
-                        name, category, color, season, notes,
-                        photo_path, occasions,
-                    )
-                    st.success("Р’РµС‰СЊ РґРѕР±Р°РІР»РµРЅР°!")
-                    st.rerun()
-
-    if not clothes:
-        st.info("РџРѕРєР° РіР°СЂРґРµСЂРѕР± РїСѓСЃС‚. Р”РѕР±Р°РІСЊ РїРµСЂРІСѓСЋ РІРµС‰СЊ РІС‹С€Рµ.")
-    else:
-        f1, f2 = st.columns(2)
-        with f1:
-            category_filter = st.selectbox(
-                "Р¤РёР»СЊС‚СЂ РїРѕ РєР°С‚РµРіРѕСЂРёРё",
-                ["Р’СЃРµ"] + sorted({item["category"] for item in clothes}),
-            )
-        with f2:
-            search = st.text_input("РџРѕРёСЃРє РїРѕ РЅР°Р·РІР°РЅРёСЋ РёР»Рё С†РІРµС‚Сѓ")
-
-        filtered = [
-            item for item in clothes
-            if (category_filter == "Р’СЃРµ"
-                or item["category"] == category_filter)
-            and search.casefold() in (
-                item["name"] + " " + item["color"]
-            ).casefold()
-        ]
-
-        st.caption(f"РџРѕРєР°Р·Р°РЅРѕ РІРµС‰РµР№: {len(filtered)}")
-        cols = st.columns(3)
-
-        for index, item in enumerate(filtered):
-            with cols[index % 3]:
-                with st.container(border=True):
-                    show_photo(item["photo_path"], 240)
-                    st.subheader(item["name"])
-                    st.caption(
-                        f"{item['category']} В· {item['color']} В· "
-                        f"{item['season']}"
-                    )
-
-                    if item["occasions"]:
-                        st.caption(f"РџРѕРІРѕРґС‹: {item['occasions']}")
-                    if item["notes"]:
-                        st.write(item["notes"])
-                        with st.expander("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ РІРµС‰СЊ"):
-                            with st.form(f"edit_clothing_{item['id']}"):
-                                edited_name = st.text_input(
-                                    "РќР°Р·РІР°РЅРёРµ",
-                                    value=item["name"],
-                                    key=f"edit_name_{item['id']}",)
-                                category_index = (
-                                    CATEGORIES.index(item["category"])
-                                    if item["category"] in CATEGORIES else 0
-                                )
-                                edited_category = st.selectbox(
-                                    "РљР°С‚РµРіРѕСЂРёСЏ",
-                                    CATEGORIES,
-                                    index=category_index,
-                                    key=f"edit_category_{item['id']}",
-                                )
-                                edited_color = st.text_input(
-                                    "Р¦РІРµС‚",
-                                    value=item["color"],
-                                    key=f"edit_color_{item['id']}",
-                                )
-                                season_index = (
-                                    SEASONS.index(item["season"])
-                                    if item["season"] in SEASONS else 0
-                                )
-                                edited_season = st.selectbox(
-                                    "РЎРµР·РѕРЅ",
-                                    SEASONS,
-                                    index=season_index,
-                                    key=f"edit_season_{item['id']}",
-                                )
-                                old_occasions = [
-                                    value.strip()
-                                    for value in (item["occasions"] or "").split(",")
-                                    if value.strip()
-                                ]
-                                edited_occasions = st.multiselect(
-                                    "Р”Р»СЏ РєР°РєРёС… РїРѕРІРѕРґРѕРІ РїРѕРґС…РѕРґРёС‚",
-                                    OCCASIONS,
-                                    default=[x for x in old_occasions if x in OCCASIONS],
-                                    key=f"edit_occasions_{item['id']}",
-                                )
-                                edited_notes = st.text_area(
-                                    "Р—Р°РјРµС‚РєРё",
-                                    value=item["notes"] or "",
-                                    key=f"edit_notes_{item['id']}",
-                                )
-                                replacement_photo = st.file_uploader(
-                                    "РќРѕРІРѕРµ С„РѕС‚Рѕ (РЅРµРѕР±СЏР·Р°С‚РµР»СЊРЅРѕ)",
-                                    type=["jpg", "jpeg", "png", "webp"],
-                                    key=f"edit_photo_{item['id']}",
-                                )
-                                save_edit = st.form_submit_button("РЎРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ")
-                                if save_edit:
-                                    if not edited_name.strip() or not edited_color.strip():
-                                        st.error("РќР°Р·РІР°РЅРёРµ Рё С†РІРµС‚ РЅРµ РґРѕР»Р¶РЅС‹ Р±С‹С‚СЊ РїСѓСЃС‚С‹РјРё.")
-                                    else:
-                                        new_photo_path = (
-                                            save_photo(replacement_photo)
-                                            if replacement_photo is not None
-                                            else None
-                                        )
-                                        update_clothing(
-                                            item["id"],
-                                            edited_name,
-                                            edited_category,
-                                            edited_color,
-                                            edited_season,
-                                            edited_notes,
-                                            edited_occasions,
-                                            new_photo_path,
-                                        )
-                                        st.success("РР·РјРµРЅРµРЅРёСЏ СЃРѕС…СЂР°РЅРµРЅС‹.")
-                                        st.rerun()
-                                        last_text = item["last_worn"] or "РџРѕРєР° РЅРµ РѕС‚РјРµС‡РµРЅРѕ"
-                                        st.caption(f"РџРѕСЃР»РµРґРЅСЏСЏ РЅРѕСЃРєР°: {last_text}")
-                                        if st.button(
-                                            "РќР°РґРµР»Р° СЃРµРіРѕРґРЅСЏ",
-                                            key=f"worn_{item['id']}",
-                                            use_container_width=True,
-                                        ):
-                                            mark_worn(item["id"])
-                                            st.rerun()
-                                        if st.button(
-                                            "РЈРґР°Р»РёС‚СЊ РІРµС‰СЊ",
-                                            key=f"delete_{item['id']}",
-                                            use_container_width=True,
-                                        ):
-                                            delete_clothing(item["id"])
-                                            st.rerun()
-
-
-
-elif page == "РџРѕРґРѕР±СЂР°С‚СЊ РѕР±СЂР°Р·":
-    st.title("РџРѕРґРѕР±СЂР°С‚СЊ РѕР±СЂР°Р·")
-    st.write(
-        "РџСЂРёР»РѕР¶РµРЅРёРµ РїСЂРµРґР»Р°РіР°РµС‚ СЃРѕС‡РµС‚Р°РЅРёСЏ РїРѕ РєР°С‚РµРіРѕСЂРёСЏРј, С†РІРµС‚Р°Рј Рё РІС‹Р±СЂР°РЅРЅРѕРјСѓ РїРѕРІРѕРґСѓ."
-    )
-
-    if len(clothes) < 2:
-        st.info("Р”РѕР±Р°РІСЊ РІ РіР°СЂРґРµСЂРѕР± С…РѕС‚СЏ Р±С‹ РґРІРµ РІРµС‰Рё.")
-    else:
-        occasion = st.selectbox("РџРѕРІРѕРґ", OCCASIONS)
-        suggestions = suggest_outfits(clothes, occasion)
-
-        if not suggestions:
-            st.warning(
-                "РџРѕРєР° РЅРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР±СЂР°С‚СЊ РєРѕРјРїР»РµРєС‚. Р”РѕР±Р°РІСЊ РІРµС‰Рё СЂР°Р·РЅС‹С… "
-                "РєР°С‚РµРіРѕСЂРёР№ вЂ” РЅР°РїСЂРёРјРµСЂ, РІРµСЂС… Рё РЅРёР·."
-            )
+        lines = [f"🌿 Образ на повод «{occasion}» ({season})\n"]
+        if outerwear: lines.append(f"• Верхняя одежда: {outerwear['name']} ({outerwear['color']})")
+        if top: lines.append(f"• Верх: {top['name']} ({top['color']})")
+        else: lines.append("• Верх: не найдено подходящей вещи")
+        if top and top["category"] == "Платье":
+            lines.append("• Низ: платье — дополнять не нужно")
         else:
-            st.subheader("Р’Р°СЂРёР°РЅС‚С‹ РёР· С‚РІРѕРµРіРѕ РіР°СЂРґРµСЂРѕР±Р°")
-            for index, outfit in enumerate(suggestions, start=1):
-                with st.container(border=True):
-                    st.markdown(f"**Р’Р°СЂРёР°РЅС‚ {index}**")
-                    show_outfit(outfit)
+            if bottom: lines.append(f"• Низ: {bottom['name']} ({bottom['color']})")
+            else: lines.append("• Низ: не найдено")
+        if shoe: lines.append(f"• Обувь: {shoe['name']} ({shoe['color']})")
+        if accessory: lines.append(f"• Аксессуар: {accessory['name']} ({accessory['color']})")
 
-                    outfit_name = st.text_input(
-                        "РќР°Р·РІР°РЅРёРµ РєРѕРјРїР»РµРєС‚Р°",
-                        value=f"{occasion}: РІР°СЂРёР°РЅС‚ {index}",
-                        key=f"outfit_name_{index}",
-                    )
-                    if st.button(
-                        "РЎРѕС…СЂР°РЅРёС‚СЊ СЌС‚РѕС‚ РѕР±СЂР°Р·",
-                        key=f"save_suggested_{index}",
-                    ):
-                        save_outfit(
-                            outfit_name,
-                            [item["id"] for item in outfit],
-                        )
-                        st.success("РћР±СЂР°Р· СЃРѕС…СЂР°РЅС‘РЅ!")
-                        st.rerun()
+        lines.append("\n💡 Совет: если хочешь добавить яркости — используй вещи в вишнёвом "
+                     "или сливовом оттенке, они хорошо сочетаются с масляно-жёлтым.")
+        self.show_text("\n".join(lines))
+
+    def show_text(self, text):
+        self.result.config(state="normal")
+        self.result.delete("1.0", "end")
+        self.result.insert("end", text)
+        self.result.config(state="disabled")
 
 
+# ---------- ПОМОЩЬ ПЕРЕД ПОКУПКОЙ ----------
+class ShoppingScreen(tk.Frame):
+    def __init__(self, app):
+        super().__init__(app, bg=BUTTER)
+        self.app = app
+        self.build()
 
-elif page == "РџРµСЂРµРґ РїРѕРєСѓРїРєРѕР№":
-    st.title("РџРµСЂРµРґ РїРѕРєСѓРїРєРѕР№")
-    st.write(
-        "РџСЂРѕРІРµСЂСЊ, РЅРµС‚ Р»Рё РїРѕС…РѕР¶РµР№ РІРµС‰Рё Рё СЃ С‡РµРј РїРѕРєСѓРїРєР° РјРѕР¶РµС‚ СЃРѕС‡РµС‚Р°С‚СЊСЃСЏ. "
-        "Р­С‚Рѕ РѕСЂРёРµРЅС‚РёСЂ, Р° РЅРµ РіР°СЂР°РЅС‚РёСЏ РёРґРµР°Р»СЊРЅРѕРіРѕ РІС‹Р±РѕСЂР°."
-    )
+    def build(self):
+        clear_frame(self)
+        head = tk.Frame(self, bg=PLUM)
+        head.pack(fill="x")
+        styled_button(head, "← Назад", self.app.show_main, bg=CHERRY).pack(side="left", padx=15, pady=10)
+        tk.Label(head, text="Помощь перед покупкой", font=FONT_TITLE,
+                 bg=PLUM, fg=BUTTER).pack(side="left", padx=10)
 
-    with st.form("purchase_form"):
-        purchase_name = st.text_input(
-            "Р§С‚Рѕ С…РѕС‡РµС€СЊ РєСѓРїРёС‚СЊ?",
-            placeholder="РќР°РїСЂРёРјРµСЂ, Р±РµР¶РµРІС‹Р№ РєР°СЂРґРёРіР°РЅ",
-        )
-        col1, col2 = st.columns(2)
+        # Список желаний
+        form = tk.Frame(self, bg=CREAM, highlightthickness=1, highlightbackground=PLUM)
+        form.pack(fill="x", padx=20, pady=12)
+        tk.Label(form, text="Вещь, которую хочу купить", font=FONT_HEAD,
+                 bg=CREAM, fg=CHERRY).grid(row=0, column=0, columnspan=4, sticky="w", padx=12, pady=8)
 
-        with col1:
-            purchase_category = st.selectbox(
-                "РљР°С‚РµРіРѕСЂРёСЏ",
-                CATEGORIES,
-                key="purchase_category",
-            )
-            purchase_color = st.text_input(
-                "Р¦РІРµС‚",
-                placeholder="РќР°РїСЂРёРјРµСЂ, Р±РµР¶РµРІС‹Р№",
-            )
-            price = st.number_input(
-                "Р¦РµРЅР° РїРѕРєСѓРїРєРё, в‚Ѕ",
-                min_value=0,
-                value=3500,
-                step=500,
-                )
+        self.e_item = styled_entry(form); self.e_item.grid(row=1, column=0, padx=6, pady=6, sticky="ew")
+        self.e_item.insert(0, "Что это?")
+        self.e_price = styled_entry(form); self.e_price.grid(row=1, column=1, padx=6, pady=6, sticky="ew")
+        self.e_price.insert(0, "Цена")
+        self.e_note = styled_entry(form); self.e_note.grid(row=1, column=2, padx=6, pady=6, sticky="ew")
+        self.e_note.insert(0, "Зачем мне это?")
 
-        with col2:
-            budget = st.number_input(
-                "Р‘СЋРґР¶РµС‚ РЅР° РїРѕРєСѓРїРєСѓ, в‚Ѕ",
-                min_value=0,
-                value=5000,
-                step=500,
-            )
-            occasion = st.selectbox(
-                "Р”Р»СЏ РєР°РєРѕРіРѕ РїРѕРІРѕРґР° РЅСѓР¶РЅР° РІРµС‰СЊ?",
-                OCCASIONS,
-                key="purchase_occasion",
-            )
+        styled_button(form, "+", self.add_wish).grid(row=1, column=3, padx=8, pady=6)
+        for i in range(4): form.columnconfigure(i, weight=1)
 
-        reason = st.text_area(
-            "Р—Р°С‡РµРј С‚РµР±Рµ СЌС‚Р° РІРµС‰СЊ?",
-            placeholder="РќР°РїСЂРёРјРµСЂ, РЅСѓР¶РЅР° РѕРґРµР¶РґР° РґР»СЏ СѓС‡С‘Р±С‹.",
-        )
-        purchase_submitted = st.form_submit_button("РџСЂРѕРІРµСЂРёС‚СЊ РїРѕРєСѓРїРєСѓ")
+        self.tree = ttk.Treeview(self, columns=("item", "price", "note"),
+                                  show="headings", height=10)
+        self.tree.heading("item", text="Вещь")
+        self.tree.heading("price", text="Цена")
+        self.tree.heading("note", text="Комментарий")
+        self.tree.column("item", width=220)
+        self.tree.column("price", width=120)
+        self.tree.column("note", width=320)
+        self.tree.pack(fill="both", expand=True, padx=20, pady=(0, 8))
 
-    if purchase_submitted:
-        if not purchase_name.strip():
-            st.error("РќР°РїРёС€Рё РЅР°Р·РІР°РЅРёРµ РІРµС‰Рё.")
+        # Кнопки-советы
+        bottom = tk.Frame(self, bg=BUTTER)
+        bottom.pack(fill="x", padx=20, pady=(0, 15))
+        styled_button(bottom, "Спросить совет", self.ask_advice, bg=CHERRY).pack(side="left", padx=4)
+        styled_button(bottom, "Удалить выбранное", self.delete_wish, bg=PLUM).pack(side="right", padx=4)
+
+        self.advice = tk.Text(self, height=5, font=FONT_BODY, bg=CREAM, fg=TEXT_DARK,
+                              relief="flat", bd=8, wrap="word")
+        self.advice.pack(fill="x", padx=20, pady=(0, 15))
+        self.advice.insert("end", "Нажми «Спросить совет» — я помогу решить, нужна ли покупка.")
+        self.advice.config(state="disabled")
+
+        self.refresh()
+
+    def add_wish(self):
+        item = self.e_item.get().strip()
+        price = self.e_price.get().strip()
+        note = self.e_note.get().strip()
+        if not item or item == "Что это?":
+            messagebox.showwarning("Внимание", "Введите название вещи")
+            return
+        db.add_wish(self.app.current_user["id"], item,
+                    price if price != "Цена" else "", note if note != "Зачем мне это?" else "")
+        for e, ph in [(self.e_item, "Что это?"), (self.e_price, "Цена"), (self.e_note, "Зачем мне это?")]:
+            e.delete(0, "end"); e.insert(0, ph)
+        self.refresh()
+
+    def delete_wish(self):
+        sel = self.tree.selection()
+        if not sel: return
+        db.delete_wish(sel[0]); self.refresh()
+
+    def refresh(self):
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        for r in db.list_wishes(self.app.current_user["id"]):
+            self.tree.insert("", "end", iid=r["id"],
+                             values=(r["item"], r["price"], r["note"]))
+
+    def ask_advice(self):
+        wishes = db.list_wishes(self.app.current_user["id"])
+        clothes = db.list_clothes(self.app.current_user["id"])
+        if not wishes:
+            msg = ("Список желаний пуст. Добавь то, что присматриваешь — "
+                   "и я помогу оценить, насколько вещь тебе нужна.")
         else:
-            # Р’РµС‰Рё С‚РѕР№ Р¶Рµ РєР°С‚РµРіРѕСЂРёРё РїРѕРєР°Р·С‹РІР°СЋС‚СЃСЏ РєР°Рє РІРѕР·РјРѕР¶РЅС‹Рµ РґСѓР±Р»Рё.
-            same_category = [
-                item for item in clothes
-                if item["category"] == purchase_category
-            ]
-
-            if purchase_color.strip():
-                same_category.sort(
-                    key=lambda item: not same_color_family(
-                        item["color"], purchase_color
-                    )
-                )
-
-            st.subheader("Р РµРєРѕРјРµРЅРґР°С†РёСЏ")
-            score = 0
-
-            if price <= budget:
-                st.success("Р¦РµРЅР° СѓРєР»Р°РґС‹РІР°РµС‚СЃСЏ РІ СѓРєР°Р·Р°РЅРЅС‹Р№ Р±СЋРґР¶РµС‚.")
-                score += 1
+            w = wishes[0]
+            item = w["item"]
+            same_color = [c for c in clothes if w["note"] and c["color"].lower() in w["note"].lower()]
+            msg = f"💭 Анализ покупки «{item}»:\n"
+            msg += "1. Проверь, сочетается ли вещь с твоими любимыми цветами и базовым гардеробом.\n"
+            msg += "2. Спроси себя: смогу ли я составить минимум 3 образа с этой вещью?\n"
+            if same_color:
+                msg += f"3. У тебя уже есть похожие вещи: {', '.join(c['name'] for c in same_color)}. Возможно, дубль не нужен.\n"
             else:
-                st.warning("Р¦РµРЅР° РІС‹С€Рµ СѓРєР°Р·Р°РЅРЅРѕРіРѕ Р±СЋРґР¶РµС‚Р°.")
-
-            if same_category:
-                st.warning(
-                    f"Р’ РіР°СЂРґРµСЂРѕР±Рµ РµСЃС‚СЊ {len(same_category)} РІРµС‰. "
-                    "С‚РѕР№ Р¶Рµ РєР°С‚РµРіРѕСЂРёРё вЂ” РїСЂРѕРІРµСЂСЊ, РЅРµ Р±СѓРґРµС‚ Р»Рё СЌС‚Рѕ РґСѓР±Р»РµРј."
-                )
-                st.markdown("**Р§С‚Рѕ СѓР¶Рµ РµСЃС‚СЊ:**")
-                for item in same_category[:5]:
-                    st.write(
-                        f"вЂў {item['name']} вЂ” {item['color']} "
-                        f"({item['category']})"
-                    )
-            else:
-                st.success("Р’РµС‰РµР№ СЌС‚РѕР№ РєР°С‚РµРіРѕСЂРёРё РІ РіР°СЂРґРµСЂРѕР±Рµ РїРѕРєР° РЅРµС‚.")
-                score += 1
-
-            
-            compatible_items = [
-                item for item in clothes
-                if item["category"] != purchase_category
-                and colors_compatible(item["color"], purchase_color)
-                and fits_occasion(item, occasion)
-            ] if purchase_color.strip() else []
-
-            if compatible_items:
-                st.markdown(
-                    f"**РР· РіР°СЂРґРµСЂРѕР±Р° РјРѕР¶РµС‚ РїРѕРґРѕР№С‚Рё Рє РїРѕРєСѓРїРєРµ "
-                    f"РґР»СЏ РїРѕРІРѕРґР° В«{occasion}В»:**"
-                )
-                for item in compatible_items[:5]:
-                    st.write(f"вЂў {item['name']} вЂ” {item['color']}")
-
-            if reason.strip():
-                st.info(
-                    "РўС‹ СѓРєР°Р·Р°Р»Р° С†РµР»СЊ РїРѕРєСѓРїРєРё. РџСЂРѕРІРµСЂСЊ, РґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ Р»Рё "
-                    "СЌС‚Р° РІРµС‰СЊ СЂРµС€Р°РµС‚ РЅСѓР¶РЅСѓСЋ Р·Р°РґР°С‡Сѓ."
-                )
-
-            if score == 2:
-                st.success("РџРѕРєСѓРїРєСѓ РјРѕР¶РЅРѕ СЂР°СЃСЃРјРѕС‚СЂРµС‚СЊ.")
-            elif score == 0:
-                st.info("РЎСЂР°РІРЅРё РїР»СЋСЃС‹ Рё РјРёРЅСѓСЃС‹ РїРµСЂРµРґ СЂРµС€РµРЅРёРµРј.")
-
-            st.caption(
-                "РџСЂРёР»РѕР¶РµРЅРёРµ СЃСЂР°РІРЅРёРІР°РµС‚ РІРІРµРґС‘РЅРЅС‹Рµ РєР°С‚РµРіРѕСЂРёРё Рё РЅР°Р·РІР°РЅРёСЏ С†РІРµС‚РѕРІ. "
-                "Р¤РѕС‚РѕРіСЂР°С„РёРё Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РЅРµ СЂР°СЃРїРѕР·РЅР°СЋС‚СЃСЏ."
-            )
+                msg += "3. Похожих вещей в гардеробе нет — это плюс к разнообразию.\n"
+            msg += "4. Если вещь не носится минимум 30 раз за сезон — лучше подождать."
+        self.advice.config(state="normal")
+        self.advice.delete("1.0", "end")
+        self.advice.insert("end", msg)
+        self.advice.config(state="disabled")
 
 
+# ---------- ПРИЛОЖЕНИЕ ----------
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("🌸 Умный шкаф")
+        self.geometry("900x650")
+        self.configure(bg=BUTTER)
+        self.current_user = None
+        self.container = tk.Frame(self, bg=BUTTER)
+        self.container.pack(fill="both", expand=True)
+        self.show_auth()
 
-elif page == "РџРѕСЂР° РЅР°РґРµС‚СЊ":
-    st.title("РџРѕСЂР° РЅР°РґРµС‚СЊ")
-    st.write(
-        "Р—РґРµСЃСЊ СЃРѕР±СЂР°РЅС‹ РІРµС‰Рё, РєРѕС‚РѕСЂС‹Рµ РЅРµ РѕС‚РјРµС‡Р°Р»РёСЃСЊ РєР°Рє РЅР°РґРµС‚С‹Рµ "
-        "30 РґРЅРµР№ РёР»Рё РґРѕР»СЊС€Рµ."
-    )
+    def show(self, frame):
+        clear_frame(self.container)
+        frame.pack(fill="both", expand=True)
 
-    forgotten = [
-        item for item in clothes
-        if days_since_last_worn(item) >= 30
-    ]
-    forgotten.sort(key=days_since_last_worn, reverse=True)
+    def show_auth(self):
+        self.show(AuthScreen(self))
 
-    if not forgotten:
-        st.success(
-            "РџРѕРєР° РЅРµС‚ РІРµС‰РµР№ РґР»СЏ РЅР°РїРѕРјРёРЅР°РЅРёСЏ. РћС‚РјРµС‡Р°Р№ РІРµС‰Рё РїРѕСЃР»Рµ РЅРѕСЃРєРё, "
-            "С‡С‚РѕР±С‹ РЅР°РїРѕРјРёРЅР°РЅРёСЏ Р±С‹Р»Рё С‚РѕС‡РЅРµРµ."
-        )
-    else:
-        occasion = st.selectbox(
-            "РџРѕРґРѕР±СЂР°С‚СЊ СЃРѕС‡РµС‚Р°РЅРёСЏ РґР»СЏ РїРѕРІРѕРґР°",
-            OCCASIONS,
-            key="reminder_occasion",
-        )
-
-        for item in forgotten:
-            with st.container(border=True):
-                col1, col2 = st.columns([1, 2])
-
-                with col1:
-                    show_photo(item["photo_path"], 180)
-
-                with col2:
-                    st.subheader(item["name"])
-                    st.caption(
-                        f"{item['category']} В· {item['color']} В· "
-                        f"{item['season']}"
-                    )
-                    st.write(
-                        f"РќРµ РѕС‚РјРµС‡Р°Р»Р°СЃСЊ РєР°Рє РЅР°РґРµС‚Р°СЏ "
-                        f"**{days_since_last_worn(item)} РґРЅРµР№**."
-                    )
-
-                    ideas = suggest_outfits(
-                        clothes,
-                        occasion,
-                        target_item=item,
-                        limit=3,
-                    )
-
-                    if ideas:
-                        st.markdown("**РРґРµРё СЃРѕС‡РµС‚Р°РЅРёР№:**")
-                        for outfit in ideas:
-                            show_outfit(outfit)
-                    else:
-                        st.write(
-                            "РџРѕРєР° РЅРµС‚ РїРѕРґС…РѕРґСЏС‰РµРіРѕ РіРѕС‚РѕРІРѕРіРѕ СЃРѕС‡РµС‚Р°РЅРёСЏ. "
-                            "РџРѕРїСЂРѕР±СѓР№ РґРѕР±Р°РІРёС‚СЊ РІРµС‰Рё РґСЂСѓРіРёС… РєР°С‚РµРіРѕСЂРёР№."
-                        )
-
-                    if st.button(
-                        "РћС‚РјРµС‚РёС‚СЊ РєР°Рє РЅР°РґРµС‚СѓСЋ СЃРµРіРѕРґРЅСЏ",
-                        key=f"reminder_worn_{item['id']}",
-                    ):
-                        mark_worn(item["id"])
-                        st.rerun()
+    def show_main(self):
+        self.show(MainScreen(self))
 
 
-
-elif page == "РњРѕРё РѕР±СЂР°Р·С‹":
-    st.title("РњРѕРё РѕР±СЂР°Р·С‹")
-    outfits = get_outfits()
-
-    if not outfits:
-        st.info(
-            "РЎРѕС…СЂР°РЅС‘РЅРЅС‹С… РѕР±СЂР°Р·РѕРІ РїРѕРєР° РЅРµС‚. РЎРѕР·РґР°Р№ РёС… РІ СЂР°Р·РґРµР»Рµ "
-            "В«РџРѕРґРѕР±СЂР°С‚СЊ РѕР±СЂР°Р·В»."
-        )
-    else:
-        clothes_by_id = {item["id"]: item for item in clothes}
-
-        labels = {
-            f"{item['name']} вЂ” {item['color']} "
-            f"({item['category']}) В· ID {item['id']}": item["id"]
-            for item in clothes
-        }
-
-        for outfit in outfits:
-            with st.container(border=True):
-                st.subheader(outfit["name"])
-                st.caption(f"РЎРѕР·РґР°РЅ: {outfit['created_at']}")
-
-                item_ids = [
-                    int(value)
-                    for value in outfit["item_ids"].split(",")
-                    if value
-                ]
-
-                saved_items = [
-                    clothes_by_id[item_id]
-                    for item_id in item_ids
-                    if item_id in clothes_by_id
-                ]
-
-                if saved_items:
-                    show_outfit(saved_items)
-                else:
-                    st.write(
-                        "Р’РµС‰Рё РёР· СЌС‚РѕРіРѕ РѕР±СЂР°Р·Р° СѓР¶Рµ СѓРґР°Р»РµРЅС‹ РёР· РіР°СЂРґРµСЂРѕР±Р°."
-                    )
-
-                with st.expander("Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ РѕР±СЂР°Р·"):
-                    with st.form(f"edit_outfit_{outfit['id']}"):
-                        edited_outfit_name = st.text_input(
-                            "РќР°Р·РІР°РЅРёРµ РѕР±СЂР°Р·Р°",
-                            value=outfit["name"],
-                            key=f"edit_outfit_name_{outfit['id']}",
-                        )
-
-                        current_labels = [
-                            label
-                            for label, clothing_id in labels.items()
-                            if clothing_id in item_ids
-                        ]
-
-                        selected_labels = st.multiselect(
-                            "Р’РµС‰Рё РІ РѕР±СЂР°Р·Рµ",
-                            options=list(labels.keys()),
-                            default=current_labels,
-                            key=f"edit_outfit_items_{outfit['id']}",
-                        )
-
-                        save_outfit_edit = st.form_submit_button(
-                            "РЎРѕС…СЂР°РЅРёС‚СЊ РѕР±СЂР°Р·"
-                        )
-
-                        if save_outfit_edit:
-                            selected_ids = [
-                                labels[label] for label in selected_labels
-                            ]
-
-                            if not edited_outfit_name.strip():
-                                st.error("РЈРєР°Р¶Рё РЅР°Р·РІР°РЅРёРµ РѕР±СЂР°Р·Р°.")
-                            elif len(selected_ids) < 2:
-                                st.error("Р’С‹Р±РµСЂРё РјРёРЅРёРјСѓРј РґРІРµ РІРµС‰Рё.")
-                            else:
-                                update_outfit(
-                                    outfit["id"],
-                                    edited_outfit_name,
-                                    selected_ids,
-                                )
-                                st.success("РћР±СЂР°Р· РѕР±РЅРѕРІР»С‘РЅ.")
-                                st.rerun()
-
-                if st.button(
-                    "РЈРґР°Р»РёС‚СЊ РѕР±СЂР°Р·",
-                    key=f"delete_outfit_{outfit['id']}",
-                ):
-                    delete_outfit(outfit["id"])
-                    st.rerun()
+if __name__ == "__main__":
+    App().mainloop()
