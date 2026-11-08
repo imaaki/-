@@ -13,16 +13,14 @@ CREAM, PLUM, CHERRY, MUTED = "#F5EFE5", "#552D43", "#742D40", "#826A73"
 
 st.markdown(f"""
 <style>
-/* ---------- БАЗА ---------- */
 .stApp {{ background: {CREAM}; color: #3A2230; }}
 h1, h2, h3 {{ color: {PLUM} !important; }}
 p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
 
-/* ---------- SIDEBAR ---------- */
 [data-testid="stSidebar"] {{ background: #E9DED2; }}
 [data-testid="stSidebar"] * {{ color: {PLUM} !important; }}
 
-/* ---------- ВСЕ КНОПКИ ПО УМОЛЧАНИЮ (светлый фон → сливовый текст) ---------- */
+/* Кнопки по умолчанию: белый фон, сливовый текст */
 .stButton > button,
 .stFormSubmitButton > button,
 .stDownloadButton > button {{
@@ -38,8 +36,7 @@ p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
     color: {PLUM} !important;
 }}
 
-/* ---------- КНОПКИ С ТЁМНЫМ ФОНОМ: текст кремовый ---------- */
-/* Сливовая (primary) */
+/* Primary-кнопки: сливовый фон, кремовый текст */
 .stButton > button[kind="primary"],
 .stFormSubmitButton > button[kind="primary"] {{
     background: {PLUM} !important;
@@ -52,45 +49,39 @@ p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
     color: {CREAM} !important;
 }}
 
-/* Синяя (если используете type="secondary" с кастомным цветом через CSS) */
-button[kind="secondary"] {{
-    /* по умолчанию secondary светлая — оставляем сливовый текст */
-}}
-
-/* ---------- МЕТРИКИ: тёмный фон, кремовый текст ---------- */
+/* Метрики: сливовый фон, кремовый текст */
 div[data-testid="stMetric"] {{ background: {PLUM}; padding: 14px; border-radius: 14px; }}
 div[data-testid="stMetric"] * {{ color: {CREAM} !important; }}
 
-/* ---------- УВЕДОМЛЕНИЯ: белый фон, сливовый текст ---------- */
+/* Уведомления: белый фон, сливовый текст */
 .stAlert, div[data-testid="stNotification"] {{ background: #FFFFFF !important; border-radius: 12px; }}
 .stAlert *, div[data-testid="stNotification"] * {{ color: {PLUM} !important; }}
 
-/* ---------- EXPANDER: белый фон, сливовый текст ---------- */
+/* Expander: белый фон, тёмный текст */
 [data-testid="stExpander"] {{ background: #FFFFFF; border-radius: 12px; }}
-[data-testid="stExpander"] * {{ color: #3A2230 !important; }}
 [data-testid="stExpander"] summary {{ color: {PLUM} !important; }}
-/* ---------- КНОПКИ ВНУТРИ EXPANDER: тёмный фон, кремовый текст ---------- */
+
+/* КНОПКИ ВНУТРИ EXPANDER: сливовый фон и рамка, кремовый текст */
 [data-testid="stExpander"] .stButton > button,
 [data-testid="stExpander"] .stFormSubmitButton > button,
-[data-testid="stExpander"] .stDownloadButton > button {
+[data-testid="stExpander"] .stDownloadButton > button {{
     background: {PLUM} !important;
     color: {CREAM} !important;
     border: 1px solid {PLUM} !important;
-}
+}}
 [data-testid="stExpander"] .stButton > button:hover,
 [data-testid="stExpander"] .stFormSubmitButton > button:hover,
-[data-testid="stExpander"] .stDownloadButton > button:hover {
+[data-testid="stExpander"] .stDownloadButton > button:hover {{
     background: {CHERRY} !important;
     color: {CREAM} !important;
     border: 1px solid {CHERRY} !important;
-}
-/* чтобы текст внутри кнопки не перебивался общим правилом expander'а */
+}}
 [data-testid="stExpander"] .stButton > button *,
-[data-testid="stExpander"] .stFormSubmitButton > button * {
+[data-testid="stExpander"] .stFormSubmitButton > button * {{
     color: {CREAM} !important;
-}
+}}
 
-/* ---------- INPUT / SELECT / TEXTAREA: белый фон, сливовый текст ---------- */
+/* Поля ввода: белый фон, сливовый текст */
 input, textarea, select,
 [data-baseweb="input"] input,
 [data-baseweb="select"] *,
