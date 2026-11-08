@@ -13,26 +13,71 @@ CREAM, PLUM, CHERRY, MUTED = "#F5EFE5", "#552D43", "#742D40", "#826A73"
 
 st.markdown(f"""
 <style>
-/* Основной фон — светлый (кремовый), текст тёмно-сливовый */
+/* ---------- БАЗА ---------- */
 .stApp {{ background: {CREAM}; color: #3A2230; }}
 h1, h2, h3 {{ color: {PLUM} !important; }}
 p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
 
-/* Sidebar — светлый, но чуть темнее, текст сливовый */
+/* ---------- SIDEBAR ---------- */
 [data-testid="stSidebar"] {{ background: #E9DED2; }}
 [data-testid="stSidebar"] * {{ color: {PLUM} !important; }}
 
-/* Кнопки — тёмный фон, молочный текст */
-.stButton > button {{ background: {PLUM}; color: #F5EFE5 !important; border: 0; border-radius: 12px; }}
-.stButton > button:hover {{ background: {CREAM}; color: #F5EFE5 !important; }}
+/* ---------- ВСЕ КНОПКИ ПО УМОЛЧАНИЮ (светлый фон → сливовый текст) ---------- */
+.stButton > button,
+.stFormSubmitButton > button,
+.stDownloadButton > button {{
+    background: #FFFFFF !important;
+    color: {PLUM} !important;
+    border: 1px solid {PLUM} !important;
+    border-radius: 12px;
+}}
+.stButton > button:hover,
+.stFormSubmitButton > button:hover,
+.stDownloadButton > button:hover {{
+    background: #F0E6DA !important;
+    color: {PLUM} !important;
+}}
 
-/* Метрики — тёмный фон, молочный текст (контраст) */
+/* ---------- КНОПКИ С ТЁМНЫМ ФОНОМ: текст кремовый ---------- */
+/* Сливовая (primary) */
+.stButton > button[kind="primary"],
+.stFormSubmitButton > button[kind="primary"] {{
+    background: {PLUM} !important;
+    color: {CREAM} !important;
+    border: 0 !important;
+}}
+.stButton > button[kind="primary"]:hover,
+.stFormSubmitButton > button[kind="primary"]:hover {{
+    background: {CHERRY} !important;
+    color: {CREAM} !important;
+}}
+
+/* Синяя (если используете type="secondary" с кастомным цветом через CSS) */
+button[kind="secondary"] {{
+    /* по умолчанию secondary светлая — оставляем сливовый текст */
+}}
+
+/* ---------- МЕТРИКИ: тёмный фон, кремовый текст ---------- */
 div[data-testid="stMetric"] {{ background: {PLUM}; padding: 14px; border-radius: 14px; }}
-div[data-testid="stMetric"] * {{ color: #F5EFE5 !important; }}
+div[data-testid="stMetric"] * {{ color: {CREAM} !important; }}
 
-/* Уведомления (success/info/warning) — светлый фон, сливовый текст */
+/* ---------- УВЕДОМЛЕНИЯ: белый фон, сливовый текст ---------- */
 .stAlert, div[data-testid="stNotification"] {{ background: #FFFFFF !important; border-radius: 12px; }}
 .stAlert *, div[data-testid="stNotification"] * {{ color: {PLUM} !important; }}
+
+/* ---------- EXPANDER: белый фон, сливовый текст ---------- */
+[data-testid="stExpander"] {{ background: #FFFFFF; border-radius: 12px; }}
+[data-testid="stExpander"] * {{ color: #3A2230 !important; }}
+[data-testid="stExpander"] summary {{ color: {PLUM} !important; }}
+
+/* ---------- INPUT / SELECT / TEXTAREA: белый фон, сливовый текст ---------- */
+input, textarea, select,
+[data-baseweb="input"] input,
+[data-baseweb="select"] *,
+[data-baseweb="textarea"] * {{
+    background: #FFFFFF !important;
+    color: {PLUM} !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
