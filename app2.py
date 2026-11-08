@@ -405,11 +405,14 @@ elif page == "Перед покупкой":
             st.success("Ты уже продумала назначение вещи. Проверь, подходит ли она к нескольким комплектам.")
         st.write("Это подсказка, а не обязательное решение — выбор остаётся за тобой.")
 
-    purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
+       purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
     if purchases:
         st.subheader("История решений")
         for p in purchases:
-            price_val = p["price"] if p["price"] is not None else 0
+            try:
+                price_val = float(p["price"]) if p["price"] not in (None, "") else 0.0
+            except (ValueError, TypeError):
+                price_val = 0.0
             color_val = p["color"] or "цвет не указан"
             sub_val = p["subcategory"] or "Другое"
             st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
