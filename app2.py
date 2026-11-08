@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import date, datetime, timedelta
 from PIL import Image
 
-st.set_page_config(page_title="Smart Closet", page_icon="👗", layout="wide")
+st.set_page_config(page_title="Smart Closet", page_icon="", layout="wide")
 
 DB_PATH = Path("smart_closet.db")
 UPLOAD_DIR = Path("uploads"); UPLOAD_DIR.mkdir(exist_ok=True)
