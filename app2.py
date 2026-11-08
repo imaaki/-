@@ -132,17 +132,9 @@ display_name = st.user.get("name", "Пользователь")
 CATEGORIES = ["Верх", "Низ", "Платья и комбинезоны", "Обувь", "Верхняя одежда", "Сумки", "Аксессуары", "Другое"]
 OCCASIONS = ["Учёба", "Прогулка", "Во двор", "Праздник", "Спорт", "Повседневное", "Другое"]
 
-def save_image(uploaded, remove_bg=False):
+def save_image(uploaded):
     if uploaded is None: return None
     image = Image.open(uploaded).convert("RGBA")
-    if remove_bg:
-        try:
-            from rembg import remove, new_session
-            # Ключевое изменение: используем лёгкую модель u2netp (~4MB) вместо bria-rmbg (~1GB)
-            session = new_session("u2netp")
-            image = remove(image, session=session)
-        except Exception:
-            st.warning("Удаление фона недоступно. Проверь установку rembg и повтори попытку.")
     path = user_dir / f"{uuid.uuid4().hex}.png"; image.save(path, format="PNG"); return str(path)
 
 def show_image(path, width=220):
@@ -162,7 +154,7 @@ def stylist_tip(sel):
 
 # ---------- НАВИГАЦИЯ ----------
 st.sidebar.title("smart closet"); st.sidebar.caption(f"Привет, {display_name}!")
-page = st.sidebar.radio("Меню", ["Главная", "Мой гардероб", "Добавить вещь", "Мои образы", "Создать образ", "Перед покупкой", "Стилист"])
+page = st.sidebar.radio("Меню", ["Главная", "Мой гардероб", "Мои образы", "Создать образ", "Перед покупкой", "Стилист"])
 if st.sidebar.button("Выйти из аккаунта"): st.logout()
 
 items, outfits = get_items(), get_outfits()
@@ -185,33 +177,65 @@ if page == "Главная":
     else: st.write("Пока все вещи в актуальном использовании. Так держать!")
     st.caption("Напоминания отображаются внутри приложения при следующем входе.")
 
-# ---------- ГАРДЕРОБ ----------
+# ---------- ГАРДЕРОБ (с кнопкой добавления) ----------
 elif page == "Мой гардероб":
     st.title("Мой гардероб")
+
+    # Кнопка-переключатель формы добавления
+    if "show_add_form" not in st.session_state:
+        st.session_state.show_add_form = False
+    if st.button("➕ Добавить вещь", type="primary"):
+        st.session_state.show_add_form = not st.session_state.show_add_form
+
+    if st.session_state.show_add_form:
+        with st.form("add_item_inline"):
+            st.markdown("**Новая вещь**")
+            name = st.text_input("Название вещи", placeholder="Например, сливовый кардиган")
+            category = st.selectbox("Категория", CATEGORIES)
+            occasion = st.selectbox("Для чего?", OCCASIONS)
+            color = st.text_input("Цвет")
+            season = st.selectbox("Сезон", ["Весна","Лето","Осень","Зима","Любой"])
+            notes = st.text_area("Заметки")
+            photo = st.file_uploader("Фотография вещи", type=["png","jpg","jpeg"])
+            if st.form_submit_button("Сохранить вещь"):
+                if not name.strip():
+                    st.error("Введи название вещи.")
+                else:
+                    path = save_image(photo)
+                    execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (uuid.uuid4().hex, user_id, name.strip(), category, occasion, color, season, notes, path, None, datetime.now().isoformat()))
+                    st.success("Вещь добавлена в гардероб!")
+                    st.session_state.show_add_form = False
+                    st.rerun()
+
     f1, f2 = st.columns(2)
-    cf = f1.selectbox("Категория", ["Все"] + CATEGORIES); of = f2.selectbox("Для чего", ["Все"] + OCCASIONS)
+    cf = f1.selectbox("Категория", ["Все"] + CATEGORIES)
+    of = f2.selectbox("Для чего", ["Все"] + OCCASIONS)
     filtered = [x for x in items if (cf == "Все" or x["category"] == cf) and (of == "Все" or x["occasion"] == of)]
-    if not filtered: st.info("Пока здесь пусто. Добавь первую вещь!")
+    if not filtered:
+        st.info("Пока здесь пусто. Добавь первую вещь!")
     for x in filtered:
         with st.expander(f"{x['name']} · {x['category']}"):
             c1, c2 = st.columns([1, 2])
             with c1: show_image(x["image_path"])
             with c2:
-                st.write(f"**Ситуация:** {x['occasion']}"); st.write(f"**Цвет:** {x['color'] or 'Не указан'}")
-                st.write(f"**Сезон:** {x['season'] or 'Любой'}"); st.write(f"**Заметки:** {x['notes'] or 'Нет'}")
+                st.write(f"**Ситуация:** {x['occasion']}")
+                st.write(f"**Цвет:** {x['color'] or 'Не указан'}")
+                st.write(f"**Сезон:** {x['season'] or 'Любой'}")
+                st.write(f"**Заметки:** {x['notes'] or 'Нет'}")
                 st.write(f"**Последний раз надевала:** {x['last_worn'] or 'Не отмечено'}")
             with st.form(f"edit_{x['id']}"):
                 st.markdown("**Изменить вещь**")
                 nn = st.text_input("Название", x["name"])
                 nc = st.selectbox("Категория", CATEGORIES, index=CATEGORIES.index(x["category"]) if x["category"] in CATEGORIES else 0)
                 no = st.selectbox("Для чего", OCCASIONS, index=OCCASIONS.index(x["occasion"]) if x["occasion"] in OCCASIONS else 0)
-                ncol = st.text_input("Цвет", x["color"] or ""); ns = st.text_input("Сезон", x["season"] or "")
+                ncol = st.text_input("Цвет", x["color"] or "")
+                ns = st.text_input("Сезон", x["season"] or "")
                 nnt = st.text_area("Заметки", x["notes"] or "")
                 nd = st.date_input("Последний раз надевала", value=date.fromisoformat(x["last_worn"]) if x["last_worn"] else date.today())
                 rep = st.file_uploader("Заменить фото", type=["png","jpg","jpeg"], key=f"r_{x['id']}")
-                rb = st.checkbox("Убрать фон у нового фото", key=f"b_{x['id']}")
                 if st.form_submit_button("Сохранить изменения"):
-                    path = save_image(rep, rb) if rep else x["image_path"]
+                    path = save_image(rep) if rep else x["image_path"]
                     execute("UPDATE items SET name=?, category=?, occasion=?, color=?, season=?, notes=?, last_worn=?, image_path=? WHERE id=? AND user_id=?",
                             (nn, nc, no, ncol, ns, nnt, nd.isoformat(), path, x["id"], user_id))
                     st.success("Вещь обновлена."); st.rerun()
@@ -222,32 +246,17 @@ elif page == "Мой гардероб":
             if st.button("Отметить как надетую сегодня", key=f"w_{x['id']}"):
                 execute("UPDATE items SET last_worn=? WHERE id=? AND user_id=?", (date.today().isoformat(), x["id"], user_id)); st.rerun()
 
-# ---------- ДОБАВИТЬ ВЕЩЬ ----------
-elif page == "Добавить вещь":
-    st.title("Добавить новую вещь")
-    with st.form("add_item"):
-        name = st.text_input("Название вещи", placeholder="Например, сливовый кардиган")
-        category = st.selectbox("Категория", CATEGORIES); occasion = st.selectbox("Для чего?", OCCASIONS)
-        color = st.text_input("Цвет"); season = st.selectbox("Сезон", ["Весна","Лето","Осень","Зима","Любой"])
-        notes = st.text_area("Заметки"); photo = st.file_uploader("Фотография вещи", type=["png","jpg","jpeg"])
-        rb = st.checkbox("Попробовать убрать фон с фотографии")
-        if st.form_submit_button("Сохранить вещь"):
-            if not name.strip(): st.error("Введи название вещи.")
-            else:
-                path = save_image(photo, rb)
-                execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                        (uuid.uuid4().hex, user_id, name.strip(), category, occasion, color, season, notes, path, None, datetime.now().isoformat()))
-                st.success("Вещь добавлена в гардероб!"); st.rerun()
-
 # ---------- ОБРАЗЫ ----------
 elif page == "Мои образы":
     st.title("Мои образы")
     if not outfits: st.info("Сохрани свой первый образ на странице «Создать образ».")
     for o in outfits:
         with st.expander(o["name"]):
-            show_image(o["image_path"], 300); st.write(f"**Ситуация:** {o['occasion']}")
+            show_image(o["image_path"], 300)
+            st.write(f"**Ситуация:** {o['occasion']}")
             ids = o["item_ids"].split(",") if o["item_ids"] else []
-            st.write("**Вещи:** " + ", ".join(item_name(i) for i in ids)); st.write(o["notes"] or "")
+            st.write("**Вещи:** " + ", ".join(item_name(i) for i in ids))
+            st.write(o["notes"] or "")
             with st.form(f"eo_{o['id']}"):
                 nn = st.text_input("Название образа", o["name"])
                 no = st.selectbox("Ситуация", OCCASIONS, index=OCCASIONS.index(o["occasion"]) if o["occasion"] in OCCASIONS else 0)
@@ -255,9 +264,8 @@ elif page == "Мои образы":
                 nids = st.multiselect("Вещи", list(avail.keys()), default=valid, format_func=lambda k: avail[k])
                 nnt = st.text_area("Комментарий", o["notes"] or "")
                 np = st.file_uploader("Заменить фото образа", type=["png","jpg","jpeg"], key=f"op_{o['id']}")
-                nb = st.checkbox("Убрать фон у нового фото", key=f"ob_{o['id']}")
                 if st.form_submit_button("Сохранить изменения"):
-                    path = save_image(np, nb) if np else o["image_path"]
+                    path = save_image(np) if np else o["image_path"]
                     execute("UPDATE outfits SET name=?, occasion=?, item_ids=?, notes=?, image_path=? WHERE id=? AND user_id=?",
                             (nn, no, ",".join(nids), nnt, path, o["id"], user_id))
                     st.success("Образ обновлён."); st.rerun()
@@ -277,11 +285,10 @@ elif page == "Создать образ":
             chosen = st.multiselect("Выбери вещи", list(avail.keys()), format_func=lambda k: avail[k])
             notes = st.text_area("Комментарий или идея")
             photo = st.file_uploader("Фото готового образа (необязательно)", type=["png","jpg","jpeg"])
-            rb = st.checkbox("Попробовать убрать фон с фото")
             if st.form_submit_button("Сохранить образ"):
                 if not on.strip(): st.error("Дай образу название.")
                 else:
-                    path = save_image(photo, rb)
+                    path = save_image(photo)
                     execute("INSERT INTO outfits VALUES (?,?,?,?,?,?,?,?)",
                             (uuid.uuid4().hex, user_id, on, occ, ",".join(chosen), notes, path, datetime.now().isoformat()))
                     st.success("Образ сохранён!"); st.rerun()
@@ -293,7 +300,8 @@ elif page == "Перед покупкой":
     st.title("Стоит ли покупать?")
     st.write("Проверь, действительно ли новая вещь нужна твоему гардеробу.")
     with st.form("purchase"):
-        name = st.text_input("Что хочешь купить?"); category = st.selectbox("Категория", CATEGORIES)
+        name = st.text_input("Что хочешь купить?")
+        category = st.selectbox("Категория", CATEGORIES)
         price = st.number_input("Цена в рублях", min_value=0.0, step=100.0)
         reason = st.text_area("Зачем тебе эта вещь? С чем будешь носить?")
         if st.form_submit_button("Оценить покупку"):
@@ -316,7 +324,8 @@ elif page == "Перед покупкой":
     purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
     if purchases:
         st.subheader("История решений")
-        for p in purchases: st.write(f"• {p['name']} — {p['price']:,.0f} ₽ — {p['decision']}".replace(",", " "))
+        for p in purchases:
+            st.write(f"• {p['name']} — {p['price']:,.0f} ₽ — {p['decision']}".replace(",", " "))
 
 # ---------- СТИЛИСТ ----------
 elif page == "Стилист":
@@ -329,9 +338,11 @@ elif page == "Стилист":
         cols = st.columns(3)
         for i, x in enumerate(matching):
             with cols[i % 3]:
-                show_image(x["image_path"], 150); st.write(f"**{x['name']}**")
+                show_image(x["image_path"], 150)
+                st.write(f"**{x['name']}**")
                 st.caption(f"{x['category']} · {x['color'] or 'цвет не указан'}")
         st.info(stylist_tip(matching[:3]))
-    else: st.info("Пока нет вещей с такой отметкой. Добавь вещь и выбери эту ситуацию.")
+    else:
+        st.info("Пока нет вещей с такой отметкой. Добавь вещь и выбери эту ситуацию.")
     st.subheader("Маленькое правило стилиста")
     st.write("Для начала выбери одну главную вещь, затем подбери к ней базовые элементы и один акцент. Не обязательно следовать трендам — важнее, чтобы тебе было удобно.")
