@@ -13,16 +13,26 @@ CREAM, PLUM, CHERRY, MUTED = "#F5EFE5", "#552D43", "#742D40", "#826A73"
 
 st.markdown(f"""
 <style>
-.stApp {{ background: {CREAM}; color: #30252A; }}
+/* Основной фон — светлый (кремовый), текст тёмно-сливовый */
+.stApp {{ background: {CREAM}; color: #3A2230; }}
 h1, h2, h3 {{ color: {PLUM} !important; }}
-p, label, .stMarkdown, .stCaption {{ color: #30252A !important; }}
+p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
+
+/* Sidebar — светлый, но чуть темнее, текст сливовый */
 [data-testid="stSidebar"] {{ background: #E9DED2; }}
-.stButton > button {{ background: {PLUM}; color: white; border: 0; border-radius: 12px; }}
-.stButton > button:hover {{ background: {CHERRY}; color: white; }}
-div[data-testid="stMetric"] {{ background: #E9DED2; padding: 14px; border-radius: 14px; color: #30252A !important; }}
-div[data-testid="stMetric"] * {{ color: #30252A !important; }}
-.stAlert, div[data-testid="stNotification"] {{ background: #FFFFFF !important; color: #30252A !important; border-radius: 12px; }}
-.stAlert * {{ color: #30252A !important; }}
+[data-testid="stSidebar"] * {{ color: {PLUM} !important; }}
+
+/* Кнопки — тёмный фон, молочный текст */
+.stButton > button {{ background: {PLUM}; color: #F5EFE5 !important; border: 0; border-radius: 12px; }}
+.stButton > button:hover {{ background: {CHERRY}; color: #F5EFE5 !important; }}
+
+/* Метрики — тёмный фон, молочный текст (контраст) */
+div[data-testid="stMetric"] {{ background: {PLUM}; padding: 14px; border-radius: 14px; }}
+div[data-testid="stMetric"] * {{ color: #F5EFE5 !important; }}
+
+/* Уведомления (success/info/warning) — светлый фон, сливовый текст */
+.stAlert, div[data-testid="stNotification"] {{ background: #FFFFFF !important; border-radius: 12px; }}
+.stAlert *, div[data-testid="stNotification"] * {{ color: {PLUM} !important; }}
 </style>
 """, unsafe_allow_html=True)
 
