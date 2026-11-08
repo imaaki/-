@@ -71,9 +71,12 @@ def save_image(uploaded, remove_bg=False):
     image = Image.open(uploaded).convert("RGBA")
     if remove_bg:
         try:
-            from rembg import remove; image = remove(image)
+            from rembg import remove, new_session
+            # Ключевое изменение: используем лёгкую модель u2netp (~4MB) вместо bria-rmbg (~1GB)
+            session = new_session("u2netp")
+            image = remove(image, session=session)
         except Exception:
-            st.warning("Удаление фона недоступно. Установи rembg и повтори попытку.")
+            st.warning("Удаление фона недоступно. Проверь установку rembg и повтори попытку.")
     path = user_dir / f"{uuid.uuid4().hex}.png"; image.save(path, format="PNG"); return str(path)
 
 def show_image(path, width=220):
