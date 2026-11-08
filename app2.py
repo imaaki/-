@@ -405,22 +405,22 @@ elif page == "Перед покупкой":
             st.success("Ты уже продумала назначение вещи. Проверь, подходит ли она к нескольким комплектам.")
         st.write("Это подсказка, а не обязательное решение — выбор остаётся за тобой.")
         purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
-    if purchases:
-        st.subheader("История решений")
-        for p in purchases:
-            try:
-                price_val = float(p["price"]) if p["price"] not in (None, "") else 0.0
-            except (ValueError, TypeError):
-                price_val = 0.0
-            color_val = p["color"] or "цвет не указан"
-            sub_val = p["subcategory"] or "Другое"
-            st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
-        if st.button("🗑 Очистить историю покупок", key="clear_purchases"):
-            execute("DELETE FROM purchases WHERE user_id=?", (user_id,))
-            st.success("История покупок очищена.")
-            st.rerun()
-    else:
-        st.info("История покупок пока пуста.")
+        if purchases:
+            st.subheader("История решений")
+            for p in purchases:
+                try:
+                    price_val = float(p["price"]) if p["price"] not in (None, "") else 0.0
+                except (ValueError, TypeError):
+                    price_val = 0.0
+                    color_val = p["color"] or "цвет не указан"
+                    sub_val = p["subcategory"] or "Другое"
+                    st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
+                    if st.button("🗑 Очистить историю покупок", key="clear_purchases"):
+                        execute("DELETE FROM purchases WHERE user_id=?", (user_id,))
+                        st.success("История покупок очищена.")
+                        st.rerun()
+        else:
+            st.info("История покупок пока пуста.")
 # ---------- СТИЛИСТ ----------
 elif page == "Стилист":
     st.title("Твой персональный стилист")
