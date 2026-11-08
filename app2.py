@@ -404,7 +404,7 @@ elif page == "Перед покупкой":
         elif len(review["reason"].strip()) > 20:
             st.success("Ты уже продумала назначение вещи. Проверь, подходит ли она к нескольким комплектам.")
         st.write("Это подсказка, а не обязательное решение — выбор остаётся за тобой.")
-            purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
+        purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
     if purchases:
         st.subheader("История решений")
         for p in purchases:
