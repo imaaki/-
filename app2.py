@@ -10,6 +10,7 @@ DB_PATH = Path("smart_closet.db")
 UPLOAD_DIR = Path("uploads"); UPLOAD_DIR.mkdir(exist_ok=True)
 
 CREAM, PLUM, CHERRY, MUTED = "#F5EFE5", "#552D43", "#742D40", "#826A73"
+BLUE, GREEN = "#2E5AAC", "#2E7D5B"
 
 st.markdown(f"""
 <style>
@@ -20,7 +21,7 @@ p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
 [data-testid="stSidebar"] {{ background: #E9DED2; }}
 [data-testid="stSidebar"] * {{ color: {PLUM} !important; }}
 
-/* Кнопки по умолчанию: белый фон, сливовый текст */
+/* --- Кнопки по умолчанию: БЕЛЫЙ фон, сливовый текст --- */
 .stButton > button,
 .stFormSubmitButton > button,
 .stDownloadButton > button {{
@@ -36,7 +37,7 @@ p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
     color: {PLUM} !important;
 }}
 
-/* Primary-кнопки: сливовый фон, кремовый текст */
+/* --- Primary (сливовая): сливовый фон, КРЕМОВЫЙ текст --- */
 .stButton > button[kind="primary"],
 .stFormSubmitButton > button[kind="primary"] {{
     background: {PLUM} !important;
@@ -49,19 +50,32 @@ p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
     color: {CREAM} !important;
 }}
 
-/* Метрики: сливовый фон, кремовый текст */
+/* --- Синяя кнопка: синий фон, КРЕМОВЫЙ текст --- */
+.stButton > button[kind="secondary"][data-color="blue"] {{
+    background: {BLUE} !important;
+    color: {CREAM} !important;
+    border: 0 !important;
+}}
+/* --- Зелёная кнопка: зелёный фон, КРЕМОВЫЙ текст --- */
+.stButton > button[kind="secondary"][data-color="green"] {{
+    background: {GREEN} !important;
+    color: {CREAM} !important;
+    border: 0 !important;
+}}
+
+/* --- Метрики: сливовый фон, кремовый текст --- */
 div[data-testid="stMetric"] {{ background: {PLUM}; padding: 14px; border-radius: 14px; }}
 div[data-testid="stMetric"] * {{ color: {CREAM} !important; }}
 
-/* Уведомления: белый фон, сливовый текст */
+/* --- Уведомления: белый фон, сливовый текст --- */
 .stAlert, div[data-testid="stNotification"] {{ background: #FFFFFF !important; border-radius: 12px; }}
 .stAlert *, div[data-testid="stNotification"] * {{ color: {PLUM} !important; }}
 
-/* Expander: белый фон, тёмный текст */
+/* --- Expander: белый фон --- */
 [data-testid="stExpander"] {{ background: #FFFFFF; border-radius: 12px; }}
 [data-testid="stExpander"] summary {{ color: {PLUM} !important; }}
 
-/* КНОПКИ ВНУТРИ EXPANDER: сливовый фон и рамка, кремовый текст */
+/* --- ВСЕ КНОПКИ ВНУТРИ EXPANDER: сливовый фон, кремовый текст --- */
 [data-testid="stExpander"] .stButton > button,
 [data-testid="stExpander"] .stFormSubmitButton > button,
 [data-testid="stExpander"] .stDownloadButton > button {{
@@ -81,7 +95,7 @@ div[data-testid="stMetric"] * {{ color: {CREAM} !important; }}
     color: {CREAM} !important;
 }}
 
-/* Поля ввода: белый фон, сливовый текст */
+/* --- Поля ввода: белый фон, сливовый текст --- */
 input, textarea, select,
 [data-baseweb="input"] input,
 [data-baseweb="select"] *,
@@ -100,8 +114,9 @@ def init_db():
     with db() as con:
         con.execute("""CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, category TEXT,
             occasion TEXT, color TEXT, season TEXT, notes TEXT, image_path TEXT, last_worn TEXT, created_at TEXT)""")
+        # В outfits добавлено поле item_images — пути к фото выбранных вещей (через запятую)
         con.execute("""CREATE TABLE IF NOT EXISTS outfits (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, occasion TEXT,
-            item_ids TEXT, notes TEXT, image_path TEXT, created_at TEXT)""")
+            item_ids TEXT, item_images TEXT, notes TEXT, image_path TEXT, created_at TEXT)""")
         con.execute("""CREATE TABLE IF NOT EXISTS purchases (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, category TEXT,
             price REAL, reason TEXT, decision TEXT, created_at TEXT)""")
 
@@ -144,6 +159,8 @@ def get_items(): return rows("SELECT * FROM items WHERE user_id=? ORDER BY creat
 def get_outfits(): return rows("SELECT * FROM outfits WHERE user_id=? ORDER BY created_at DESC", (user_id,))
 def item_name(i):
     f = rows("SELECT name FROM items WHERE id=? AND user_id=?", (i, user_id)); return f[0]["name"] if f else "Удалённая вещь"
+def item_image(i):
+    f = rows("SELECT image_path FROM items WHERE id=? AND user_id=?", (i, user_id)); return f[0]["image_path"] if f else None
 
 def stylist_tip(sel):
     if not sel: return "Добавь вещи в гардероб — и я помогу собрать сочетание."
@@ -154,7 +171,7 @@ def stylist_tip(sel):
 
 # ---------- НАВИГАЦИЯ ----------
 st.sidebar.title("smart closet"); st.sidebar.caption(f"Привет, {display_name}!")
-page = st.sidebar.radio("Меню", ["Главная", "Мой гардероб", "Мои образы", "Создать образ", "Перед покупкой", "Стилист"])
+page = st.sidebar.radio("Меню", ["Главная", "Мой гардероб", "Мои образы", "Перед покупкой", "Стилист"])
 if st.sidebar.button("Выйти из аккаунта"): st.logout()
 
 items, outfits = get_items(), get_outfits()
@@ -181,7 +198,6 @@ if page == "Главная":
 elif page == "Мой гардероб":
     st.title("Мой гардероб")
 
-    # Кнопка-переключатель формы добавления
     if "show_add_form" not in st.session_state:
         st.session_state.show_add_form = False
     if st.button("➕ Добавить вещь", type="primary"):
@@ -246,17 +262,67 @@ elif page == "Мой гардероб":
             if st.button("Отметить как надетую сегодня", key=f"w_{x['id']}"):
                 execute("UPDATE items SET last_worn=? WHERE id=? AND user_id=?", (date.today().isoformat(), x["id"], user_id)); st.rerun()
 
-# ---------- ОБРАЗЫ ----------
+# ---------- МОИ ОБРАЗЫ + СОЗДАНИЕ ОБРАЗА ----------
 elif page == "Мои образы":
     st.title("Мои образы")
-    if not outfits: st.info("Сохрани свой первый образ на странице «Создать образ».")
+
+    if "show_outfit_form" not in st.session_state:
+        st.session_state.show_outfit_form = False
+    if st.button("➕ Создать образ", type="primary"):
+        st.session_state.show_outfit_form = not st.session_state.show_outfit_form
+
+    # Форма создания образа прямо на странице
+    if st.session_state.show_outfit_form:
+        if not items:
+            st.info("Сначала добавь хотя бы одну вещь в гардероб.")
+        else:
+            avail = {x["id"]: x["name"] for x in items}
+            with st.form("new_outfit_inline"):
+                st.markdown("**Новый образ**")
+                on = st.text_input("Название образа", placeholder="Например, уютный образ на учёбу")
+                occ = st.selectbox("Куда собираемся?", OCCASIONS)
+                chosen = st.multiselect("Выбери вещи", list(avail.keys()), format_func=lambda k: avail[k])
+                notes = st.text_area("Комментарий или идея")
+                photo = st.file_uploader("Фото готового образа (необязательно)", type=["png","jpg","jpeg"])
+                if st.form_submit_button("Сохранить образ"):
+                    if not on.strip():
+                        st.error("Дай образу название.")
+                    elif not chosen:
+                        st.error("Выбери хотя бы одну вещь.")
+                    else:
+                        path = save_image(photo)
+                        # Сохраняем пути к фото выбранных вещей
+                        chosen_images = ",".join([item_image(i) or "" for i in chosen])
+                        execute("INSERT INTO outfits VALUES (?,?,?,?,?,?,?,?,?)",
+                                (uuid.uuid4().hex, user_id, on, occ, ",".join(chosen), chosen_images, notes, path, datetime.now().isoformat()))
+                        st.success("Образ сохранён!")
+                        st.session_state.show_outfit_form = False
+                        st.rerun()
+
+    if not outfits:
+        st.info("Пока нет сохранённых образов. Нажми «➕ Создать образ», чтобы добавить первый.")
     for o in outfits:
         with st.expander(o["name"]):
-            show_image(o["image_path"], 300)
+            # Фото образа (если загружено) и фото вещей
+            if o["image_path"]:
+                show_image(o["image_path"], 300)
             st.write(f"**Ситуация:** {o['occasion']}")
             ids = o["item_ids"].split(",") if o["item_ids"] else []
             st.write("**Вещи:** " + ", ".join(item_name(i) for i in ids))
+
+            # --- Миниатюры фото вещей, входящих в образ ---
+            if ids:
+                st.write("**Фото вещей в образе:**")
+                cols = st.columns(min(len(ids), 4))
+                for idx, iid in enumerate(ids):
+                    with cols[idx % 4]:
+                        img = item_image(iid)
+                        if img and Path(img).exists():
+                            st.image(img, width=120)
+                        st.caption(item_name(iid))
+
             st.write(o["notes"] or "")
+
             with st.form(f"eo_{o['id']}"):
                 nn = st.text_input("Название образа", o["name"])
                 no = st.selectbox("Ситуация", OCCASIONS, index=OCCASIONS.index(o["occasion"]) if o["occasion"] in OCCASIONS else 0)
@@ -266,34 +332,14 @@ elif page == "Мои образы":
                 np = st.file_uploader("Заменить фото образа", type=["png","jpg","jpeg"], key=f"op_{o['id']}")
                 if st.form_submit_button("Сохранить изменения"):
                     path = save_image(np) if np else o["image_path"]
-                    execute("UPDATE outfits SET name=?, occasion=?, item_ids=?, notes=?, image_path=? WHERE id=? AND user_id=?",
-                            (nn, no, ",".join(nids), nnt, path, o["id"], user_id))
+                    chosen_images = ",".join([item_image(i) or "" for i in nids])
+                    execute("UPDATE outfits SET name=?, occasion=?, item_ids=?, item_images=?, notes=?, image_path=? WHERE id=? AND user_id=?",
+                            (nn, no, ",".join(nids), chosen_images, nnt, path, o["id"], user_id))
                     st.success("Образ обновлён."); st.rerun()
             if st.button("Удалить образ", key=f"do_{o['id']}"):
                 execute("DELETE FROM outfits WHERE id=? AND user_id=?", (o["id"], user_id))
                 if o["image_path"] and Path(o["image_path"]).exists(): Path(o["image_path"]).unlink()
                 st.rerun()
-
-elif page == "Создать образ":
-    st.title("Создать образ")
-    if not items: st.info("Сначала добавь хотя бы одну вещь в гардероб.")
-    else:
-        avail = {x["id"]: x["name"] for x in items}
-        with st.form("new_outfit"):
-            on = st.text_input("Название образа", placeholder="Например, уютный образ на учёбу")
-            occ = st.selectbox("Куда собираемся?", OCCASIONS)
-            chosen = st.multiselect("Выбери вещи", list(avail.keys()), format_func=lambda k: avail[k])
-            notes = st.text_area("Комментарий или идея")
-            photo = st.file_uploader("Фото готового образа (необязательно)", type=["png","jpg","jpeg"])
-            if st.form_submit_button("Сохранить образ"):
-                if not on.strip(): st.error("Дай образу название.")
-                else:
-                    path = save_image(photo)
-                    execute("INSERT INTO outfits VALUES (?,?,?,?,?,?,?,?)",
-                            (uuid.uuid4().hex, user_id, on, occ, ",".join(chosen), notes, path, datetime.now().isoformat()))
-                    st.success("Образ сохранён!"); st.rerun()
-        st.subheader("Подсказка стилиста")
-        st.write(stylist_tip([x for x in items if x["id"] in st.session_state.get("chosen_preview", [])]))
 
 # ---------- ПЕРЕД ПОКУПКОЙ ----------
 elif page == "Перед покупкой":
