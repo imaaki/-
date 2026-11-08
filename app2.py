@@ -406,11 +406,19 @@ elif page == "Перед покупкой":
         st.write("Это подсказка, а не обязательное решение — выбор остаётся за тобой.")
 
     purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
-    if purchases:
-        st.subheader("История решений")
-        for p in purchases:
-            st.write(f"• {p['name']} — {p['category']}/{p['subcategory']} — {p['color'] or 'цвет не указан'} — {p['price']:,.0f} ₽ — {p['decision']}".replace(",", " "))
-
+if purchases:
+    st.subheader("История решений")
+    for p in purchases:
+        price_val = p["price"] if p["price"] is not None else 0
+        color_val = p["color"] or "цвет не указан"
+        sub_val = p["subcategory"] or "Другое"
+        st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
+    if st.button("🗑 Очистить историю покупок", key="clear_purchases"):
+        execute("DELETE FROM purchases WHERE user_id=?", (user_id,))
+        st.success("История покупок очищена.")
+        st.rerun()
+else:
+    st.info("История покупок пока пуста.")
 # ---------- СТИЛИСТ ----------
 elif page == "Стилист":
     st.title("Твой персональный стилист")
