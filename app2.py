@@ -24,7 +24,7 @@ p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
 
 /* Кнопки — тёмный фон, молочный текст */
 .stButton > button {{ background: {PLUM}; color: #F5EFE5 !important; border: 0; border-radius: 12px; }}
-.stButton > button:hover {{ background: {CHERRY}; color: #F5EFE5 !important; }}
+.stButton > button:hover {{ background: {CREAM}; color: #F5EFE5 !important; }}
 
 /* Метрики — тёмный фон, молочный текст (контраст) */
 div[data-testid="stMetric"] {{ background: {PLUM}; padding: 14px; border-radius: 14px; }}
