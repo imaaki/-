@@ -69,6 +69,26 @@ div[data-testid="stMetric"] * {{ color: {CREAM} !important; }}
 [data-testid="stExpander"] {{ background: #FFFFFF; border-radius: 12px; }}
 [data-testid="stExpander"] * {{ color: #3A2230 !important; }}
 [data-testid="stExpander"] summary {{ color: {PLUM} !important; }}
+/* ---------- КНОПКИ ВНУТРИ EXPANDER: тёмный фон, кремовый текст ---------- */
+[data-testid="stExpander"] .stButton > button,
+[data-testid="stExpander"] .stFormSubmitButton > button,
+[data-testid="stExpander"] .stDownloadButton > button {
+    background: {PLUM} !important;
+    color: {CREAM} !important;
+    border: 1px solid {PLUM} !important;
+}
+[data-testid="stExpander"] .stButton > button:hover,
+[data-testid="stExpander"] .stFormSubmitButton > button:hover,
+[data-testid="stExpander"] .stDownloadButton > button:hover {
+    background: {CHERRY} !important;
+    color: {CREAM} !important;
+    border: 1px solid {CHERRY} !important;
+}
+/* чтобы текст внутри кнопки не перебивался общим правилом expander'а */
+[data-testid="stExpander"] .stButton > button *,
+[data-testid="stExpander"] .stFormSubmitButton > button * {
+    color: {CREAM} !important;
+}
 
 /* ---------- INPUT / SELECT / TEXTAREA: белый фон, сливовый текст ---------- */
 input, textarea, select,
