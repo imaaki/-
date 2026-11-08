@@ -114,6 +114,7 @@ def init_db():
             item_ids TEXT, item_images TEXT, notes TEXT, image_path TEXT, created_at TEXT)""")
         con.execute("""CREATE TABLE IF NOT EXISTS purchases (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, category TEXT,
             subcategory TEXT, color TEXT, price REAL, reason TEXT, decision TEXT, created_at TEXT)""")
+        
 
 def rows(q, p=()):
     with db() as con: return con.execute(q, p).fetchall()
@@ -122,6 +123,22 @@ def execute(q, p=()):
     with db() as con: con.execute(q, p)
 
 init_db()
+def migrate_db():
+    with db() as con:
+        cols_items = [r["name"] for r in con.execute("PRAGMA table_info(items)").fetchall()]
+        if "subcategory" not in cols_items:
+            con.execute("ALTER TABLE items ADD COLUMN subcategory TEXT DEFAULT 'Другое'")
+        cols_purch = [r["name"] for r in con.execute("PRAGMA table_info(purchases)").fetchall()]
+        if "subcategory" not in cols_purch:
+            con.execute("ALTER TABLE purchases ADD COLUMN subcategory TEXT DEFAULT 'Другое'")
+        if "color" not in cols_purch:
+            con.execute("ALTER TABLE purchases ADD COLUMN color TEXT DEFAULT ''")
+        cols_outf = [r["name"] for r in con.execute("PRAGMA table_info(outfits)").fetchall()]
+        if "item_images" not in cols_outf:
+            con.execute("ALTER TABLE outfits ADD COLUMN item_images TEXT DEFAULT ''")
+
+init_db()
+migrate_db()
 
 # ---------- ВХОД ----------
 def login_screen():
