@@ -341,7 +341,7 @@ elif page == "Мой гардероб":
                 st.rerun()
             if col_b.button("Отметить как надетую сегодня", key=f"w_{x['id']}"):
                 execute_and_clear("UPDATE items SET last_worn=? WHERE id=? AND user_id=?", (date.today().isoformat(), x["id"], user_id)); st.rerun()
-                elif page == "Мои образы":
+elif page == "Мои образы":
     st.title("Мои образы")
 
     if "show_outfit_form" not in st.session_state:
