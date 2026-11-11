@@ -93,7 +93,6 @@ input, textarea, select,
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- БД ----------
 def db():
     conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row; return conn
 
@@ -136,7 +135,6 @@ def migrate_db():
 
 migrate_db()
 
-# ---------- ВХОД ----------
 def login_screen():
     st.title("smart closet"); st.caption("YOUR PERSONAL WARDROBE")
     st.write("Войди через Google, чтобы открыть свой личный гардероб.")
@@ -151,7 +149,6 @@ user_id = hashlib.sha256(user_email.lower().encode()).hexdigest()[:24]
 user_dir = UPLOAD_DIR / user_id; user_dir.mkdir(parents=True, exist_ok=True)
 display_name = st.user.get("name", "Пользователь")
 
-# ---------- БАЗОВЫЕ КАТЕГОРИИ ----------
 BASE_CATEGORY_TREE = {
     "Верх": ["Футболка", "Кофта", "Лонгслив", "Рубашка", "Блузка", "Свитер", "Кардиган", "Топ", "Худи", "Другое"],
     "Низ": ["Брюки", "Джинсы", "Шорты", "Спортивные штаны", "Юбка", "Леггинсы", "Бриджи", "Другое"],
@@ -163,7 +160,7 @@ BASE_CATEGORY_TREE = {
     "Другое": ["Другое"],
 }
 OCCASIONS = ["Учёба", "Прогулка", "Во двор", "Праздник", "Спорт", "Повседневное", "Другое"]
-NEW_OPTION = "➕ Создать новую…"
+NEW_OPTION = "Создать новую..."
 
 @st.cache_data(ttl=30, show_spinner=False)
 def get_custom_categories(uid):
@@ -201,7 +198,6 @@ def add_custom_category(uid, name, parent_category=""):
 CATEGORY_TREE = build_category_tree(user_id)
 CATEGORIES = list(CATEGORY_TREE.keys())
 
-# ---------- КАРТИНКИ ----------
 def save_image(uploaded):
     if uploaded is None: return None
     image = Image.open(uploaded).convert("RGB")
@@ -213,7 +209,6 @@ def save_image(uploaded):
 def show_image(path, width=220):
     if path and Path(path).exists(): st.image(path, width=width)
 
-# ---------- КЭШИРУЕМОЕ ЧТЕНИЕ ----------
 @st.cache_data(ttl=30, show_spinner=False)
 def get_items_cached(uid):
     return [dict(r) for r in rows("SELECT * FROM items WHERE user_id=? ORDER BY created_at DESC", (uid,))]
@@ -244,15 +239,12 @@ def stylist_tip(sel):
     if len(set(colors)) == 1 and len(colors) > 1: return "В комплекте много одного цвета. Попробуй добавить нейтральный оттенок."
     if len(sel) == 1: return "Добавь ещё одну вещь или аксессуар, чтобы завершить комплект."
     return "Попробуй повторить один цвет в двух элементах образа — так комплект будет выглядеть цельнее."
-
-# ---------- НАВИГАЦИЯ ----------
-st.sidebar.title("smart closet"); st.sidebar.caption(f"Привет, {display_name}!")
+    st.sidebar.title("smart closet"); st.sidebar.caption(f"Привет, {display_name}!")
 page = st.sidebar.radio("Меню", ["Главная", "Мой гардероб", "Мои образы", "Перед покупкой", "Стилист"])
 if st.sidebar.button("Выйти из аккаунта"): st.logout()
 
 items, outfits = get_items(), get_outfits()
 
-# ---------- ГЛАВНАЯ ----------
 if page == "Главная":
     st.title("Твой умный шкаф")
     st.write("Всё, что ты носишь, любишь и планируешь купить — в одном месте.")
@@ -268,15 +260,13 @@ if page == "Главная":
         st.write("Эти вещи давно не отмечались как надетые:")
         for x in old[:8]: st.write(f"• **{x['name']}** — {x['last_worn'] or 'ещё не отмечали'}")
     else: st.write("Пока все вещи в актуальном использовании. Так держать!")
-    st.caption("Напоминания отображаются внутри приложения при следующем входе.")
 
-# ---------- ГАРДЕРОБ ----------
 elif page == "Мой гардероб":
     st.title("Мой гардероб")
 
     if "show_add_form" not in st.session_state:
         st.session_state.show_add_form = False
-    if st.button("➕ Добавить вещь", type="primary"):
+    if st.button("Добавить вещь", type="primary"):
         st.session_state.show_add_form = not st.session_state.show_add_form
 
     if st.session_state.show_add_form:
@@ -347,7 +337,7 @@ elif page == "Мой гардероб":
                 st.write(f"**Сезон:** {x['season'] or 'Любой'}")
                 st.write(f"**Заметки:** {x['notes'] or 'Нет'}")
                 st.write(f"**Последний раз надевала:** {x['last_worn'] or 'Не отмечено'}")
-            if st.checkbox("✏️ Редактировать", key=f"ed_{x['id']}"):
+            if st.checkbox("Редактировать", key=f"ed_{x['id']}"):
                 cat_options = CATEGORIES + [NEW_OPTION]
                 idx_cat = cat_options.index(x["category"]) if x["category"] in cat_options else 0
                 nc_choice = st.selectbox("Категория", cat_options, index=idx_cat, key=f"ec_{x['id']}")
@@ -401,14 +391,12 @@ elif page == "Мой гардероб":
                 st.rerun()
             if col_b.button("Отметить как надетую сегодня", key=f"w_{x['id']}"):
                 execute_and_clear("UPDATE items SET last_worn=? WHERE id=? AND user_id=?", (date.today().isoformat(), x["id"], user_id)); st.rerun()
-
-# ---------- МОИ ОБРАЗЫ ----------
-elif page == "Мои образы":
+                elif page == "Мои образы":
     st.title("Мои образы")
 
     if "show_outfit_form" not in st.session_state:
         st.session_state.show_outfit_form = False
-    if st.button("➕ Создать образ", type="primary"):
+    if st.button("Создать образ", type="primary"):
         st.session_state.show_outfit_form = not st.session_state.show_outfit_form
 
     if st.session_state.show_outfit_form:
@@ -438,7 +426,7 @@ elif page == "Мои образы":
                         st.rerun()
 
     if not outfits:
-        st.info("Пока нет сохранённых образов. Нажми «➕ Создать образ», чтобы добавить первый.")
+        st.info("Пока нет сохранённых образов. Нажми «Создать образ», чтобы добавить первый.")
     for o in outfits:
         with st.expander(o["name"]):
             if o["image_path"]:
@@ -455,7 +443,7 @@ elif page == "Мои образы":
                         if img and Path(img).exists(): st.image(img, width=120)
                         st.caption(item_name(iid))
             st.write(o["notes"] or "")
-            if st.checkbox("✏️ Редактировать образ", key=f"edo_{o['id']}"):
+            if st.checkbox("Редактировать образ", key=f"edo_{o['id']}"):
                 with st.form(f"eo_{o['id']}"):
                     nn = st.text_input("Название образа", o["name"])
                     no = st.selectbox("Ситуация", OCCASIONS, index=OCCASIONS.index(o["occasion"]) if o["occasion"] in OCCASIONS else 0)
@@ -475,7 +463,6 @@ elif page == "Мои образы":
                 if o["image_path"] and Path(o["image_path"]).exists(): Path(o["image_path"]).unlink()
                 st.rerun()
 
-# ---------- ПЕРЕД ПОКУПКОЙ ----------
 elif page == "Перед покупкой":
     st.title("Стоит ли покупать?")
     st.write("Проверь, действительно ли новая вещь нужна твоему гардеробу.")
@@ -558,14 +545,13 @@ elif page == "Перед покупкой":
                 color_val = p["color"] or "цвет не указан"
                 sub_val = p["subcategory"] or "Другое"
                 st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
-            if st.button("🗑 Очистить историю покупок", key="clear_purchases"):
+            if st.button("Очистить историю покупок", key="clear_purchases"):
                 execute_and_clear("DELETE FROM purchases WHERE user_id=?", (user_id,))
                 st.success("История покупок очищена.")
                 st.rerun()
         else:
             st.info("История покупок пока пуста.")
 
-# ---------- СТИЛИСТ ----------
 elif page == "Стилист":
     st.title("Твой персональный стилист")
     st.write("Выбери ситуацию — я сам соберу несколько готовых образов из твоих вещей.")
@@ -577,131 +563,12 @@ elif page == "Стилист":
         st.info("Пока нет вещей с такой отметкой. Добавь вещь и выбери эту ситуацию.")
         st.stop()
 
-        def by_cat(cat):
-            return [x for x in pool if x["category"] == cat]
+    def by_cat(cat):
+        return [x for x in pool if x["category"] == cat]
 
     tops = by_cat("Верх")
     bottoms = by_cat("Низ")
     dresses = by_cat("Платья и комбинезоны")
     shoes = by_cat("Обувь")
     outer = by_cat("Верхняя одежда")
-    bags = by_cat("Сумки")
-    accs = by_cat("Аксессуары")
-
-    can_basic = bool(tops and bottoms) or bool(dresses)
-    if not can_basic:
-        st.warning("Чтобы собрать образ, нужно хотя бы: верх + низ, либо платье/комбинезон.")
-        st.write("Сейчас в гардеробе под эту ситуацию есть:")
-        for label, arr in [("Верх", tops), ("Низ", bottoms), ("Платья", dresses),
-                           ("Обувь", shoes), ("Верхняя одежда", outer),
-                           ("Сумки", bags), ("Аксессуары", accs)]:
-            st.write(f"• {label}: {len(arr)}")
-        st.stop()
-
-    def color_key(x):
-        return (x["color"] or "").strip().lower()
-
-    def pick_accent(base_items):
-        base_colors = {color_key(i) for i in base_items if color_key(i)}
-        candidates = [a for a in accs if color_key(a) and color_key(a) not in base_colors]
-        return random.choice(candidates) if candidates else (random.choice(accs) if accs else None)
-
-    def pick_bag(base_items):
-        base_colors = {color_key(i) for i in base_items if color_key(i)}
-        candidates = [b for b in bags if color_key(b) and color_key(b) not in base_colors]
-        return random.choice(candidates) if candidates else (random.choice(bags) if bags else None)
-
-    def build_outfit():
-        base = []
-        if dresses and random.random() < 0.5:
-            base.append(random.choice(dresses))
-        elif tops and bottoms:
-            base.append(random.choice(tops))
-            base.append(random.choice(bottoms))
-        elif dresses:
-            base.append(random.choice(dresses))
-        else:
-            return None
-
-        if shoes:
-            base.append(random.choice(shoes))
-        if outer and random.random() < 0.6:
-            base.append(random.choice(outer))
-
-        bag = pick_bag(base)
-        if bag:
-            base.append(bag)
-        acc = pick_accent(base)
-        if acc:
-            base.append(acc)
-
-        seen, result = set(), []
-        for it in base:
-            if it["id"] not in seen:
-                seen.add(it["id"])
-                result.append(it)
-        return result
-
-    def outfit_signature(outfit):
-        return tuple(sorted(i["id"] for i in outfit))
-
-    if "stylist_variants" not in st.session_state or st.session_state.get("stylist_occ") != occ:
-        st.session_state.stylist_occ = occ
-        st.session_state.stylist_variants = []
-
-    if st.button("Собрать образы", type="primary") or not st.session_state.stylist_variants:
-        variants, signatures = [], set()
-        attempts = 0
-        while len(variants) < 3 and attempts < 60:
-            attempts += 1
-            o = build_outfit()
-            if not o:
-                break
-            sig = outfit_signature(o)
-            if sig in signatures:
-                continue
-            signatures.add(sig)
-            variants.append(o)
-        st.session_state.stylist_variants = variants
-
-    variants = st.session_state.stylist_variants
-
-    if not variants:
-        st.warning("Не удалось собрать ни одного образа. Проверь, что есть верх и низ (или платье).")
-        st.stop()
-
-    st.subheader(f"Готовые образы для ситуации «{occ.lower()}»")
-
-    for idx, outfit in enumerate(variants, start=1):
-        with st.container(border=True):
-            st.markdown(f"### Образ {idx}")
-            cols = st.columns(min(len(outfit), 4))
-            for j, it in enumerate(outfit):
-                with cols[j % 4]:
-                    show_image(it["image_path"], 140)
-                    st.caption(f"**{it['name']}**")
-                    st.caption(f"{it['category']} / {it['subcategory']}")
-                    if it["color"]:
-                        st.caption(f"Цвет: {it['color']}")
-
-            names = [it["name"] for it in outfit]
-            st.write("**Состав:** " + ", ".join(names))
-
-            colors_in_outfit = [color_key(it) for it in outfit if color_key(it)]
-            unique_colors = set(colors_in_outfit)
-            if len(unique_colors) >= 3:
-                st.info("В образе 3+ цвета — следи, чтобы они сочетались. Один из них лучше сделать нейтральным.")
-            elif len(unique_colors) == 1:
-                st.info("Образ в одном цвете — выглядит цельно. Можно добавить аксессуар-акцент другого оттенка.")
-            else:
-                st.success("Хорошее сочетание: 2 цвета — базовый и поддерживающий.")
-
-    if st.button("Собрать другие варианты"):
-        st.session_state.stylist_variants = []
-        st.rerun()
-
-    st.caption(
-        "Стилист подбирает образы по правилам: база (верх+низ или платье), "
-        "обувь, при необходимости верхняя одежда, сумка и аксессуар-акцент. "
-        "Цвета старается не повторять."
-    )
+    bags = by_cat
