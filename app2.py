@@ -578,7 +578,7 @@ elif page == "Стилист":
         st.stop()
 
         def by_cat(cat):
-        return [x for x in pool if x["category"] == cat]
+            return [x for x in pool if x["category"] == cat]
 
     tops = by_cat("Верх")
     bottoms = by_cat("Низ")
