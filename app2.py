@@ -17,78 +17,30 @@ st.markdown(f"""
 .stApp {{ background: {CREAM}; color: #3A2230; }}
 h1, h2, h3 {{ color: {PLUM} !important; }}
 p, label, .stMarkdown, .stCaption, .stText {{ color: #3A2230 !important; }}
-
 [data-testid="stSidebar"] {{ background: #E9DED2; }}
 [data-testid="stSidebar"] * {{ color: {PLUM} !important; }}
-
-.stButton > button,
-.stFormSubmitButton > button,
-.stDownloadButton > button {{
-    background: #FFFFFF !important;
-    color: {PLUM} !important;
-    border: 1px solid {PLUM} !important;
-    border-radius: 12px;
+.stButton > button, .stFormSubmitButton > button, .stDownloadButton > button {{
+    background: #FFFFFF !important; color: {PLUM} !important;
+    border: 1px solid {PLUM} !important; border-radius: 12px;
 }}
-.stButton > button:hover,
-.stFormSubmitButton > button:hover,
-.stDownloadButton > button:hover {{
-    background: #F0E6DA !important;
-    color: {PLUM} !important;
+.stButton > button:hover, .stFormSubmitButton > button:hover, .stDownloadButton > button:hover {{
+    background: #F0E6DA !important; color: {PLUM} !important;
 }}
-
-.stButton > button[kind="primary"],
-.stFormSubmitButton > button[kind="primary"] {{
-    background: {PLUM} !important;
-    color: {CREAM} !important;
-    border: 0 !important;
+.stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"] {{
+    background: {PLUM} !important; color: {CREAM} !important; border: 0 !important;
 }}
-.stButton > button[kind="primary"]:hover,
-.stFormSubmitButton > button[kind="primary"]:hover {{
-    background: {CHERRY} !important;
-    color: {CREAM} !important;
+.stButton > button[kind="primary"]:hover, .stFormSubmitButton > button[kind="primary"]:hover {{
+    background: {CHERRY} !important; color: {CREAM} !important;
 }}
-
-.stButton > button[kind="secondary"][data-color="blue"] {{
-    background: {BLUE} !important; color: {CREAM} !important; border: 0 !important;
-}}
-.stButton > button[kind="secondary"][data-color="green"] {{
-    background: {GREEN} !important; color: {CREAM} !important; border: 0 !important;
-}}
-
 div[data-testid="stMetric"] {{ background: {PLUM}; padding: 14px; border-radius: 14px; }}
 div[data-testid="stMetric"] * {{ color: {CREAM} !important; }}
-
 .stAlert, div[data-testid="stNotification"] {{ background: #FFFFFF !important; border-radius: 12px; }}
 .stAlert *, div[data-testid="stNotification"] * {{ color: {PLUM} !important; }}
-
 [data-testid="stExpander"] {{ background: #FFFFFF; border-radius: 12px; }}
 [data-testid="stExpander"] summary {{ color: {PLUM} !important; }}
-
-[data-testid="stExpander"] .stButton > button,
-[data-testid="stExpander"] .stFormSubmitButton > button,
-[data-testid="stExpander"] .stDownloadButton > button {{
-    background: {PLUM} !important;
-    color: {CREAM} !important;
-    border: 1px solid {PLUM} !important;
-}}
-[data-testid="stExpander"] .stButton > button:hover,
-[data-testid="stExpander"] .stFormSubmitButton > button:hover,
-[data-testid="stExpander"] .stDownloadButton > button:hover {{
-    background: {CHERRY} !important;
-    color: {CREAM} !important;
-    border: 1px solid {CHERRY} !important;
-}}
-[data-testid="stExpander"] .stButton > button *,
-[data-testid="stExpander"] .stFormSubmitButton > button * {{
-    color: {CREAM} !important;
-}}
-
-input, textarea, select,
-[data-baseweb="input"] input,
-[data-baseweb="select"] *,
-[data-baseweb="textarea"] * {{
-    background: #FFFFFF !important;
-    color: {PLUM} !important;
+input, textarea, select, [data-baseweb="input"] input,
+[data-baseweb="select"] *, [data-baseweb="textarea"] * {{
+    background: #FFFFFF !important; color: {PLUM} !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -114,8 +66,7 @@ def execute(q, p=()):
     with db() as con: con.execute(q, p)
 
 def execute_and_clear(q, p=()):
-    execute(q, p)
-    st.cache_data.clear()
+    execute(q, p); st.cache_data.clear()
 
 init_db()
 
@@ -239,12 +190,12 @@ def stylist_tip(sel):
     if len(set(colors)) == 1 and len(colors) > 1: return "В комплекте много одного цвета. Попробуй добавить нейтральный оттенок."
     if len(sel) == 1: return "Добавь ещё одну вещь или аксессуар, чтобы завершить комплект."
     return "Попробуй повторить один цвет в двух элементах образа — так комплект будет выглядеть цельнее."
-    st.sidebar.title("smart closet"); st.sidebar.caption(f"Привет, {display_name}!")
+
+st.sidebar.title("smart closet"); st.sidebar.caption(f"Привет, {display_name}!")
 page = st.sidebar.radio("Меню", ["Главная", "Мой гардероб", "Мои образы", "Перед покупкой", "Стилист"])
 if st.sidebar.button("Выйти из аккаунта"): st.logout()
 
 items, outfits = get_items(), get_outfits()
-
 if page == "Главная":
     st.title("Твой умный шкаф")
     st.write("Всё, что ты носишь, любишь и планируешь купить — в одном месте.")
@@ -271,7 +222,6 @@ elif page == "Мой гардероб":
 
     if st.session_state.show_add_form:
         st.markdown("**Новая вещь**")
-
         cat_options = CATEGORIES + [NEW_OPTION]
         category_choice = st.selectbox("Категория", cat_options, key="add_cat")
 
@@ -525,7 +475,6 @@ elif page == "Перед покупкой":
 
         if review["color"] and review["similar_color"]:
             st.warning(f"Вещи того же цвета уже есть: " + ", ".join(review["similar_color"]))
-            st.write("Если это базовый цвет — возможно, дубликат не нужен. Если акцентный — проверь, с чем будешь носить.")
         elif review["color"]:
             st.info(f"Вещей цвета «{review['color']}» в гардеробе пока нет — это может быть хорошим акцентом.")
 
@@ -571,4 +520,18 @@ elif page == "Стилист":
     dresses = by_cat("Платья и комбинезоны")
     shoes = by_cat("Обувь")
     outer = by_cat("Верхняя одежда")
-    bags = by_cat
+    bags = by_cat("Сумки")
+    accs = by_cat("Аксессуары")
+
+    can_basic = bool(tops and bottoms) or bool(dresses)
+    if not can_basic:
+        st.warning("Чтобы собрать образ, нужно хотя бы: верх + низ, либо платье/комбинезон.")
+        st.write("Сейчас в гардеробе под эту ситуацию есть:")
+        for label, arr in [("Верх", tops), ("Низ", bottoms), ("Платья", dresses),
+                           ("Обувь", shoes), ("Верхняя одежда", outer),
+                           ("Сумки", bags), ("Аксессуары", accs)]:
+            st.write(f"• {label}: {len(arr)}")
+        st.stop()
+
+    def color_key(x):
+        return (x["color"] or
