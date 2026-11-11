@@ -178,11 +178,11 @@ def show_image(path, width=220):
 # ---------- КЭШИРУЕМОЕ ЧТЕНИЕ ----------
 @st.cache_data(ttl=30, show_spinner=False)
 def get_items_cached(uid):
-    return rows("SELECT * FROM items WHERE user_id=? ORDER BY created_at DESC", (uid,))
+    return [dict(r) for r in rows("SELECT * FROM items WHERE user_id=? ORDER BY created_at DESC", (uid,))]
 
 @st.cache_data(ttl=30, show_spinner=False)
 def get_outfits_cached(uid):
-    return rows("SELECT * FROM outfits WHERE user_id=? ORDER BY created_at DESC", (uid,))
+    return [dict(r) for r in rows("SELECT * FROM outfits WHERE user_id=? ORDER BY created_at DESC", (uid,))]
 
 @st.cache_data(ttl=30, show_spinner=False)
 def items_map(uid):
