@@ -533,5 +533,99 @@ elif page == "Стилист":
             st.write(f"• {label}: {len(arr)}")
         st.stop()
 
-    def color_key(x):
-        return (x["color"] or
+       def color_key(x):
+        return (x["color"] or "").strip().lower()
+
+    def pick_accent(base_items):
+        base_colors = {color_key(i) for i in base_items if color_key(i)}
+        candidates = [a for a in accs if color_key(a) and color_key(a) not in base_colors]
+        return random.choice(candidates) if candidates else (random.choice(accs) if accs else None)
+
+    def pick_bag(base_items):
+        base_colors = {color_key(i) for i in base_items if color_key(i)}
+        candidates = [b for b in bags if color_key(b) and color_key(b) not in base_colors]
+        return random.choice(candidates) if candidates else (random.choice(bags) if bags else None)
+
+    def build_outfit():
+        base = []
+        if dresses and random.random() < 0.5:
+            base.append(random.choice(dresses))
+        elif tops and bottoms:
+            base.append(random.choice(tops))
+            base.append(random.choice(bottoms))
+        elif dresses:
+            base.append(random.choice(dresses))
+        else:
+            return None
+        if shoes:
+            base.append(random.choice(shoes))
+        if outer and random.random() < 0.6:
+            base.append(random.choice(outer))
+        bag = pick_bag(base)
+        if bag:
+            base.append(bag)
+        acc = pick_accent(base)
+        if acc:
+            base.append(acc)
+        seen, result = set(), []
+        for it in base:
+            if it["id"] not in seen:
+                seen.add(it["id"])
+                result.append(it)
+        return result
+
+    def outfit_signature(outfit):
+        return tuple(sorted(i["id"] for i in outfit))
+
+    if "stylist_variants" not in st.session_state or st.session_state.get("stylist_occ") != occ:
+        st.session_state.stylist_occ = occ
+        st.session_state.stylist_variants = []
+
+    if st.button("Собрать образы", type="primary") or not st.session_state.stylist_variants:
+        variants, signatures = [], set()
+        attempts = 0
+        while len(variants) < 3 and attempts < 60:
+            attempts += 1
+            o = build_outfit()
+            if not o:
+                break
+            sig = outfit_signature(o)
+            if sig in signatures:
+                continue
+            signatures.add(sig)
+            variants.append(o)
+        st.session_state.stylist_variants = variants
+
+    variants = st.session_state.stylist_variants
+
+    if not variants:
+        st.warning("Не удалось собрать ни одного образа. Проверь, что есть верх и низ (или платье).")
+        st.stop()
+
+    st.subheader(f"Готовые образы для ситуации «{occ.lower()}»")
+
+    for idx, outfit in enumerate(variants, start=1):
+        with st.container(border=True):
+            st.markdown(f"### Образ {idx}")
+            cols = st.columns(min(len(outfit), 4))
+            for j, it in enumerate(outfit):
+                with cols[j % 4]:
+                    show_image(it["image_path"], 140)
+                    st.caption(f"**{it['name']}**")
+                    st.caption(f"{it['category']} / {it['subcategory']}")
+                    if it["color"]:
+                        st.caption(f"Цвет: {it['color']}")
+            names = [it["name"] for it in outfit]
+            st.write("**Состав:** " + ", ".join(names))
+            colors_in_outfit = [color_key(it) for it in outfit if color_key(it)]
+            unique_colors = set(colors_in_outfit)
+            if len(unique_colors) >= 3:
+                st.info("В образе 3+ цвета — следи, чтобы они сочетались. Один из них лучше сделать нейтральным.")
+            elif len(unique_colors) == 1:
+                st.info("Образ в одном цвете — выглядит цельно. Можно добавить аксессуар-акцент другого оттенка.")
+            else:
+                st.success("Хорошее сочетание: 2 цвета — базовый и поддерживающий.")
+
+    if st.button("Собрать другие варианты"):
+        st.session_state.stylist_variants = []
+        st.rerun()
