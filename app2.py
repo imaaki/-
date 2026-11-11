@@ -458,7 +458,6 @@ elif page == "Стилист":
 
     occ = st.selectbox("Куда нужен образ?", OCCASIONS)
 
-    # Отбираем вещи под ситуацию (или «Другое» как универсальные)
     pool = [x for x in items if x["occasion"] == occ or x["occasion"] == "Другое"]
 
     if not pool:
@@ -588,4 +587,6 @@ elif page == "Стилист":
         st.session_state.stylist_variants = []
         st.rerun()
 
-    st.caption("Стилист подбирает образы по правилам
+    st.caption(
+        "Стилист подбирает образы по правилам: база (верх+низ или платье), "
+        "обувь, при
