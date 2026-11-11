@@ -278,7 +278,7 @@ elif page == "Мой гардероб":
                 st.write(f"**Сезон:** {x['season'] or 'Любой'}")
                 st.write(f"**Заметки:** {x['notes'] or 'Нет'}")
                 st.write(f"**Последний раз надевала:** {x['last_worn'] or 'Не отмечено'}")
-            if st.checkbox("✏️ Редактировать", key=f"ed_{x['id']}"):
+            if st.checkbox(" Редактировать", key=f"ed_{x['id']}"):
                 with st.form(f"edit_{x['id']}"):
                     st.markdown("**Изменить вещь**")
                     nn = st.text_input("Название (необязательно)", x["name"])
