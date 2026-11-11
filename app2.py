@@ -151,11 +151,11 @@ display_name = st.user.get("name", "Пользователь")
 
 # ---------- КАТЕГОРИИ С ПОДКАТЕГОРИЯМИ ----------
 CATEGORY_TREE = {
-    "Верх": ["Футболка", "Лонгслив", "Рубашка", "Блузка", "Свитер", "Кардиган", "Топ", "Худи", "Другое"],
+    "Верх": ["Футболка", "Кофта", "Лонгслив", "Рубашка", "Блузка", "Свитер", "Кардиган", "Топ", "Худи", "Другое"],
     "Низ": ["Брюки", "Джинсы", "Шорты", "Спортивные штаны", "Юбка", "Леггинсы", "Бриджи", "Другое"],
     "Платья и комбинезоны": ["Платье", "Сарафан", "Комбинезон", "Другое"],
-    "Обувь": ["Кроссовки", "Ботинки", "Туфли", "Кеды", "Сандалии", "Балетки", "Сапоги", "Другое"],
-    "Верхняя одежда": ["Куртка", "Пальто", "Плащ", "Пуховик", "Пиджак", "Другое"],
+    "Обувь": ["Кроссовки", "Ботинки", "Туфли", "Кеды", "Сандали", "Балетки", "Сапоги", "Босоножки", "Другое"],
+    "Верхняя одежда": ["Куртка", "Жилет", "Безрукавка", "Пальто", "Плащ", "Пуховик", "Пиджак", "Другое"],
     "Сумки": ["Рюкзак", "Сумка через плечо", "Клатч", "Шоппер", "Другое"],
     "Аксессуары": ["Кольцо", "Серьги", "Цепочка", "Браслет", "Шарф", "Шапка", "Перчатки", "Ремень", "Очки", "Другое"],
     "Другое": ["Другое"],
@@ -242,24 +242,29 @@ elif page == "Мой гардероб":
         st.session_state.show_add_form = not st.session_state.show_add_form
 
     if st.session_state.show_add_form:
+        st.markdown("**Новая вещь**")
+        # Категория и тип — ВНЕ формы, чтобы тип обновлялся сразу
+        category = st.selectbox("Категория", CATEGORIES, key="add_cat")
+        subcategory = st.selectbox("Тип", CATEGORY_TREE[category], key="add_sub")
+
         with st.form("add_item_inline"):
-            st.markdown("**Новая вещь**")
             name = st.text_input("Название вещи (необязательно)", placeholder="Например, сливовый кардиган")
-            category = st.selectbox("Категория", CATEGORIES)
-            subcategory = st.selectbox("Тип", CATEGORY_TREE[category])
             occasion = st.selectbox("Для чего?", OCCASIONS)
             color = st.text_input("Цвет")
             season = st.selectbox("Сезон", ["Весна","Лето","Осень","Зима","Любой"])
             notes = st.text_area("Заметки")
             photo = st.file_uploader("Фотография вещи", type=["png","jpg","jpeg"])
-            if st.form_submit_button("Сохранить вещь"):
-                final_name = name.strip() or (subcategory + (f" · {color.strip()}" if color.strip() else ""))
-                path = save_image(photo)
-                execute_and_clear("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (uuid.uuid4().hex, user_id, final_name, category, subcategory, occasion, color, season, notes, path, None, datetime.now().isoformat()))
-                st.success("Вещь добавлена в гардероб!")
-                st.session_state.show_add_form = False
-                st.rerun()
+            submitted = st.form_submit_button("Сохранить вещь")
+
+        if submitted:
+            final_name = name.strip() or (subcategory + (f" · {color.strip()}" if color.strip() else ""))
+            path = save_image(photo)
+            execute_and_clear("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (uuid.uuid4().hex, user_id, final_name, category, subcategory, occasion,
+                     color, season, notes, path, None, datetime.now().isoformat()))
+            st.success("Вещь добавлена в гардероб!")
+            st.session_state.show_add_form = False
+            st.rerun()
 
     f1, f2 = st.columns(2)
     cf = f1.selectbox("Категория", ["Все"] + CATEGORIES)
@@ -279,12 +284,18 @@ elif page == "Мой гардероб":
                 st.write(f"**Заметки:** {x['notes'] or 'Нет'}")
                 st.write(f"**Последний раз надевала:** {x['last_worn'] or 'Не отмечено'}")
             if st.checkbox(" Редактировать", key=f"ed_{x['id']}"):
+                # Категория и тип — ВНЕ формы
+                nc = st.selectbox("Категория", CATEGORIES,
+                                  index=CATEGORIES.index(x["category"]) if x["category"] in CATEGORIES else 0,
+                                  key=f"ec_{x['id']}")
+                nsubs = CATEGORY_TREE.get(nc, ["Другое"])
+                nsub = st.selectbox("Тип", nsubs,
+                                    index=nsubs.index(x["subcategory"]) if x["subcategory"] in nsubs else 0,
+                                    key=f"es_{x['id']}")
+
                 with st.form(f"edit_{x['id']}"):
                     st.markdown("**Изменить вещь**")
                     nn = st.text_input("Название (необязательно)", x["name"])
-                    nc = st.selectbox("Категория", CATEGORIES, index=CATEGORIES.index(x["category"]) if x["category"] in CATEGORIES else 0)
-                    nsubs = CATEGORY_TREE.get(nc, ["Другое"])
-                    nsub = st.selectbox("Тип", nsubs, index=nsubs.index(x["subcategory"]) if x["subcategory"] in nsubs else 0)
                     no = st.selectbox("Для чего", OCCASIONS, index=OCCASIONS.index(x["occasion"]) if x["occasion"] in OCCASIONS else 0)
                     ncol = st.text_input("Цвет", x["color"] or "")
                     ns = st.text_input("Сезон", x["season"] or "")
@@ -358,7 +369,7 @@ elif page == "Мои образы":
                         if img and Path(img).exists(): st.image(img, width=120)
                         st.caption(item_name(iid))
             st.write(o["notes"] or "")
-            if st.checkbox("✏️ Редактировать образ", key=f"edo_{o['id']}"):
+            if st.checkbox("Редактировать образ", key=f"edo_{o['id']}"):
                 with st.form(f"eo_{o['id']}"):
                     nn = st.text_input("Название образа", o["name"])
                     no = st.selectbox("Ситуация", OCCASIONS, index=OCCASIONS.index(o["occasion"]) if o["occasion"] in OCCASIONS else 0)
@@ -382,10 +393,13 @@ elif page == "Мои образы":
 elif page == "Перед покупкой":
     st.title("Стоит ли покупать?")
     st.write("Проверь, действительно ли новая вещь нужна твоему гардеробу.")
+
+    # Категория и тип — ВНЕ формы
+    category = st.selectbox("Категория", CATEGORIES, key="pur_cat")
+    subcategory = st.selectbox("Тип", CATEGORY_TREE[category], key="pur_sub")
+
     with st.form("purchase"):
         name = st.text_input("Что хочешь купить?")
-        category = st.selectbox("Категория", CATEGORIES)
-        subcategory = st.selectbox("Тип", CATEGORY_TREE[category])
         color = st.text_input("Цвет покупки")
         price = st.number_input("Цена в рублях", min_value=0.0, step=100.0)
         reason = st.text_area("Зачем тебе эта вещь? С чем будешь носить?")
