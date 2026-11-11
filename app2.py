@@ -228,7 +228,7 @@ elif page == "Мой гардероб":
     if st.session_state.show_add_form:
         with st.form("add_item_inline"):
             st.markdown("**Новая вещь**")
-            name = st.text_input("Название вещи", placeholder="Например, сливовый кардиган")
+            name = st.text_input("Название вещи (необязательно)", placeholder="Например, сливовый кардиган")
             category = st.selectbox("Категория", CATEGORIES)
             subcategory = st.selectbox("Тип", CATEGORY_TREE[category])
             occasion = st.selectbox("Для чего?", OCCASIONS)
@@ -237,15 +237,13 @@ elif page == "Мой гардероб":
             notes = st.text_area("Заметки")
             photo = st.file_uploader("Фотография вещи", type=["png","jpg","jpeg"])
             if st.form_submit_button("Сохранить вещь"):
-                if not name.strip():
-                    st.error("Введи название вещи.")
-                else:
-                    path = save_image(photo)
-                    execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                            (uuid.uuid4().hex, user_id, name.strip(), category, subcategory, occasion, color, season, notes, path, None, datetime.now().isoformat()))
-                    st.success("Вещь добавлена в гардероб!")
-                    st.session_state.show_add_form = False
-                    st.rerun()
+                final_name = name.strip() or (subcategory + (f" · {color.strip()}" if color.strip() else ""))
+                path = save_image(photo)
+                execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (uuid.uuid4().hex, user_id, final_name, category, subcategory, occasion, color, season, notes, path, None, datetime.now().isoformat()))
+                st.success("Вещь добавлена в гардероб!")
+                st.session_state.show_add_form = False
+                st.rerun()
 
     f1, f2 = st.columns(2)
     cf = f1.selectbox("Категория", ["Все"] + CATEGORIES)
@@ -266,7 +264,7 @@ elif page == "Мой гардероб":
                 st.write(f"**Последний раз надевала:** {x['last_worn'] or 'Не отмечено'}")
             with st.form(f"edit_{x['id']}"):
                 st.markdown("**Изменить вещь**")
-                nn = st.text_input("Название", x["name"])
+                nn = st.text_input("Название (необязательно)", x["name"])
                 nc = st.selectbox("Категория", CATEGORIES, index=CATEGORIES.index(x["category"]) if x["category"] in CATEGORIES else 0)
                 nsubs = CATEGORY_TREE.get(nc, ["Другое"])
                 nsub = st.selectbox("Тип", nsubs, index=nsubs.index(x["subcategory"]) if x["subcategory"] in nsubs else 0)
@@ -277,9 +275,10 @@ elif page == "Мой гардероб":
                 nd = st.date_input("Последний раз надевала", value=date.fromisoformat(x["last_worn"]) if x["last_worn"] else date.today())
                 rep = st.file_uploader("Заменить фото", type=["png","jpg","jpeg"], key=f"r_{x['id']}")
                 if st.form_submit_button("Сохранить изменения"):
+                    final_name = nn.strip() or (nsub + (f" · {ncol.strip()}" if ncol.strip() else ""))
                     path = save_image(rep) if rep else x["image_path"]
                     execute("UPDATE items SET name=?, category=?, subcategory=?, occasion=?, color=?, season=?, notes=?, last_worn=?, image_path=? WHERE id=? AND user_id=?",
-                            (nn, nc, nsub, no, ncol, ns, nnt, nd.isoformat(), path, x["id"], user_id))
+                            (final_name, nc, nsub, no, ncol, ns, nnt, nd.isoformat(), path, x["id"], user_id))
                     st.success("Вещь обновлена."); st.rerun()
             if st.button("Удалить вещь", key=f"d_{x['id']}"):
                 execute("DELETE FROM items WHERE id=? AND user_id=?", (x["id"], user_id))
@@ -412,15 +411,16 @@ elif page == "Перед покупкой":
                     price_val = float(p["price"]) if p["price"] not in (None, "") else 0.0
                 except (ValueError, TypeError):
                     price_val = 0.0
-                    color_val = p["color"] or "цвет не указан"
-                    sub_val = p["subcategory"] or "Другое"
-                    st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
-                    if st.button("🗑 Очистить историю покупок", key="clear_purchases"):
-                        execute("DELETE FROM purchases WHERE user_id=?", (user_id,))
-                        st.success("История покупок очищена.")
-                        st.rerun()
+                color_val = p["color"] or "цвет не указан"
+                sub_val = p["subcategory"] or "Другое"
+                st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
+            if st.button("🗑 Очистить историю покупок", key="clear_purchases"):
+                execute("DELETE FROM purchases WHERE user_id=?", (user_id,))
+                st.success("История покупок очищена.")
+                st.rerun()
         else:
             st.info("История покупок пока пуста.")
+
 # ---------- СТИЛИСТ ----------
 elif page == "Стилист":
     st.title("Твой персональный стилист")
