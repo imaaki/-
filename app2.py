@@ -532,8 +532,7 @@ elif page == "Стилист":
                            ("Сумки", bags), ("Аксессуары", accs)]:
             st.write(f"• {label}: {len(arr)}")
         st.stop()
-
-       def color_key(x):
+    def color_key(x):
         return (x["color"] or "").strip().lower()
 
     def pick_accent(base_items):
