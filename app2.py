@@ -571,7 +571,6 @@ elif page == "Стилист":
     st.write("Выбери ситуацию — я сам соберу несколько готовых образов из твоих вещей.")
 
     occ = st.selectbox("Куда нужен образ?", OCCASIONS)
-
     pool = [x for x in items if x["occasion"] == occ or x["occasion"] == "Другое"]
 
     if not pool:
@@ -579,4 +578,6 @@ elif page == "Стилист":
         st.stop()
 
     def by_cat(cat):
-        return [x for x in pool if x["category"] == cat
+        return [x for x in pool if x["category"] == cat]
+
+    tops = by_cat("В
