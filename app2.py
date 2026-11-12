@@ -1,25 +1,16 @@
 import streamlit as st
-import uuid, hashlib, random
+import sqlite3, uuid, hashlib, random
 from pathlib import Path
 from datetime import date, datetime, timedelta
 from PIL import Image
-from supabase import create_client
 
 st.set_page_config(page_title="Smart Closet", page_icon="", layout="wide")
 
+DB_PATH = Path("smart_closet.db")
 UPLOAD_DIR = Path("uploads"); UPLOAD_DIR.mkdir(exist_ok=True)
 
 CREAM, PLUM, CHERRY, MUTED = "#F5EFE5", "#552D43", "#742D40", "#826A73"
 BLUE, GREEN = "#2E5AAC", "#2E7D5B"
-
-# ---------- ПОДКЛЮЧЕНИЕ К SUPABASE ----------
-@st.cache_resource
-def init_supabase():
-    url = st.secrets["connections"]["supabase"]["SUPABASE_URL"]
-    key = st.secrets["connections"]["supabase"]["SUPABASE_KEY"]
-    return create_client(url, key)
-
-supabase = init_supabase()
 
 st.markdown(f"""
 <style>
@@ -54,38 +45,51 @@ input, textarea, select, [data-baseweb="input"] input,
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- ФУНКЦИИ РАБОТЫ С БД ----------
-def rows(table, filters=None):
-    q = supabase.table(table).select("*")
-    if filters:
-        for k, v in filters.items():
-            q = q.eq(k, v)
-    res = q.execute()
-    return res.data
+def db():
+    conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row; return conn
 
-def execute_insert(table, data):
-    supabase.table(table).insert(data).execute()
-    st.cache_data.clear()
+def init_db():
+    with db() as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, category TEXT,
+            subcategory TEXT, occasion TEXT, color TEXT, season TEXT, notes TEXT, image_path TEXT, last_worn TEXT, created_at TEXT)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS outfits (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, occasion TEXT,
+            item_ids TEXT, item_images TEXT, notes TEXT, image_path TEXT, created_at TEXT)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS purchases (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, category TEXT,
+            subcategory TEXT, color TEXT, price REAL, reason TEXT, decision TEXT, created_at TEXT)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS custom_categories (
+            id TEXT PRIMARY KEY, user_id TEXT, name TEXT, parent_category TEXT)""")
 
-def execute_update(table, filters, data):
-    q = supabase.table(table)
-    for k, v in filters.items():
-        q = q.eq(k, v)
-    q.update(data).execute()
-    st.cache_data.clear()
+def rows(q, p=()):
+    with db() as con: return con.execute(q, p).fetchall()
 
-def execute_delete(table, filters):
-    q = supabase.table(table)
-    for k, v in filters.items():
-        q = q.eq(k, v)
-    q.delete().execute()
-    st.cache_data.clear()
+def execute(q, p=()):
+    with db() as con: con.execute(q, p)
 
-# ---------- ВХОД ----------
+def execute_and_clear(q, p=()):
+    execute(q, p); st.cache_data.clear()
+
+init_db()
+
+def migrate_db():
+    with db() as con:
+        cols_items = [r["name"] for r in con.execute("PRAGMA table_info(items)").fetchall()]
+        if "subcategory" not in cols_items:
+            con.execute("ALTER TABLE items ADD COLUMN subcategory TEXT DEFAULT 'Другое'")
+        cols_purch = [r["name"] for r in con.execute("PRAGMA table_info(purchases)").fetchall()]
+        if "subcategory" not in cols_purch:
+            con.execute("ALTER TABLE purchases ADD COLUMN subcategory TEXT DEFAULT 'Другое'")
+        if "color" not in cols_purch:
+            con.execute("ALTER TABLE purchases ADD COLUMN color TEXT DEFAULT ''")
+        cols_outf = [r["name"] for r in con.execute("PRAGMA table_info(outfits)").fetchall()]
+        if "item_images" not in cols_outf:
+            con.execute("ALTER TABLE outfits ADD COLUMN item_images TEXT DEFAULT ''")
+
+migrate_db()
+
 def login_screen():
     st.title("smart closet"); st.caption("YOUR PERSONAL WARDROBE")
     st.write("Войди через Google, чтобы открыть свой личный гардероб.")
-    st.info("Для входа настрой Google OAuth в файле `.streamlit/secrets.toml`.")
+    st.info("Для входа настрой Google OAuth в файле `.streamlit/secrets.toml` (инструкция в README).")
     if st.button("Продолжить через Google", use_container_width=True): st.login()
 
 if not st.user.is_logged_in:
@@ -111,29 +115,35 @@ NEW_OPTION = "Создать новую..."
 
 @st.cache_data(ttl=30, show_spinner=False)
 def get_custom_categories(uid):
-    return rows("custom_categories", {"user_id": uid})
+    return [dict(r) for r in rows("SELECT * FROM custom_categories WHERE user_id=?", (uid,))]
 
 def build_category_tree(uid):
     tree = {k: list(v) for k, v in BASE_CATEGORY_TREE.items()}
     customs = get_custom_categories(uid)
     for c in customs:
         if not c["parent_category"]:
-            if c["name"] not in tree: tree[c["name"]] = ["Другое"]
+            name = c["name"]
+            if name not in tree:
+                tree[name] = ["Другое"]
     for c in customs:
         if c["parent_category"]:
-            p = c["parent_category"]
-            if p in tree and c["name"] not in tree[p]: tree[p].append(c["name"])
-            elif p not in tree: tree[p] = [c["name"]]
+            parent = c["parent_category"]
+            if parent in tree and c["name"] not in tree[parent]:
+                tree[parent].append(c["name"])
+            elif parent not in tree:
+                tree[parent] = [c["name"]]
     return tree
 
 def add_custom_category(uid, name, parent_category=""):
     name = name.strip()
-    if not name: return False
+    if not name:
+        return False
     customs = get_custom_categories(uid)
     for c in customs:
         if c["name"].lower() == name.lower() and (c["parent_category"] or "") == (parent_category or ""):
             return False
-    execute_insert("custom_categories", {"id": uuid.uuid4().hex, "user_id": uid, "name": name, "parent_category": parent_category or ""})
+    execute_and_clear("INSERT INTO custom_categories VALUES (?,?,?,?)",
+                      (uuid.uuid4().hex, uid, name, parent_category or ""))
     return True
 
 CATEGORY_TREE = build_category_tree(user_id)
@@ -151,21 +161,28 @@ def show_image(path, width=220):
     if path and Path(path).exists(): st.image(path, width=width)
 
 @st.cache_data(ttl=30, show_spinner=False)
-def get_items_cached(uid): return rows("items", {"user_id": uid})
+def get_items_cached(uid):
+    return [dict(r) for r in rows("SELECT * FROM items WHERE user_id=? ORDER BY created_at DESC", (uid,))]
 
 @st.cache_data(ttl=30, show_spinner=False)
-def get_outfits_cached(uid): return rows("outfits", {"user_id": uid})
+def get_outfits_cached(uid):
+    return [dict(r) for r in rows("SELECT * FROM outfits WHERE user_id=? ORDER BY created_at DESC", (uid,))]
+
+@st.cache_data(ttl=30, show_spinner=False)
+def items_map(uid):
+    return {r["id"]: {"name": r["name"], "image_path": r["image_path"]}
+            for r in rows("SELECT id, name, image_path FROM items WHERE user_id=?", (uid,))}
 
 def get_items(): return get_items_cached(user_id)
 def get_outfits(): return get_outfits_cached(user_id)
 
 def item_name(i):
-    m = {r["id"]: r["name"] for r in get_items()}
-    return m.get(i, "Удалённая вещь")
+    m = items_map(user_id)
+    return m.get(i, {}).get("name", "Удалённая вещь")
 
 def item_image(i):
-    m = {r["id"]: r["image_path"] for r in get_items()}
-    return m.get(i)
+    m = items_map(user_id)
+    return m.get(i, {}).get("image_path")
 
 def stylist_tip(sel):
     if not sel: return "Добавь вещи в гардероб — и я помогу собрать сочетание."
@@ -184,7 +201,7 @@ if page == "Главная":
     st.write("Всё, что ты носишь, любишь и планируешь купить — в одном месте.")
     a, b, c = st.columns(3)
     a.metric("Вещей в гардеробе", len(items)); b.metric("Сохранённых образов", len(outfits))
-    c.metric("Покупок на рассмотрении", len([p for p in rows("purchases", {"user_id": user_id, "decision": "Думаю"})]))
+    c.metric("Покупок на рассмотрении", len(rows("SELECT id FROM purchases WHERE user_id=? AND decision='Думаю'", (user_id,))))
     st.subheader("Совет стилиста")
     st.success("Необязательно покупать новое: иногда новый образ получается из уже знакомых вещей.")
     st.subheader("Пора вспомнить")
@@ -197,31 +214,43 @@ if page == "Главная":
 
 elif page == "Мой гардероб":
     st.title("Мой гардероб")
-    if "show_add_form" not in st.session_state: st.session_state.show_add_form = False
-    if st.button("Добавить вещь", type="primary"): st.session_state.show_add_form = not st.session_state.show_add_form
+
+    if "show_add_form" not in st.session_state:
+        st.session_state.show_add_form = False
+    if st.button("Добавить вещь", type="primary"):
+        st.session_state.show_add_form = not st.session_state.show_add_form
 
     if st.session_state.show_add_form:
         st.markdown("**Новая вещь**")
         cat_options = CATEGORIES + [NEW_OPTION]
         category_choice = st.selectbox("Категория", cat_options, key="add_cat")
+
         if category_choice == NEW_OPTION:
             new_cat = st.text_input("Название новой категории", key="add_new_cat")
             if st.button("Создать категорию", key="btn_new_cat"):
                 if add_custom_category(user_id, new_cat, ""):
-                    st.success(f"Категория «{new_cat.strip()}» создана."); st.rerun()
-                else: st.error("Введите название или такая категория уже есть.")
+                    st.success(f"Категория «{new_cat.strip()}» создана.")
+                    st.rerun()
+                else:
+                    st.error("Введите название или такая категория уже есть.")
             st.stop()
+
         category = category_choice
         sub_options = CATEGORY_TREE.get(category, ["Другое"]) + [NEW_OPTION]
         subcategory_choice = st.selectbox("Тип", sub_options, key="add_sub")
+
         if subcategory_choice == NEW_OPTION:
             new_sub = st.text_input("Название нового типа", key="add_new_sub")
             if st.button("Создать тип", key="btn_new_sub"):
                 if add_custom_category(user_id, new_sub, category):
-                    st.success(f"Тип «{new_sub.strip()}» создан в категории «{category}»."); st.rerun()
-                else: st.error("Введите название или такой тип уже есть.")
+                    st.success(f"Тип «{new_sub.strip()}» создан в категории «{category}».")
+                    st.rerun()
+                else:
+                    st.error("Введите название или такой тип уже есть.")
             st.stop()
+
         subcategory = subcategory_choice
+
         with st.form("add_item_inline"):
             name = st.text_input("Название вещи (необязательно)", placeholder="Например, сливовый кардиган")
             occasion = st.selectbox("Для чего?", OCCASIONS)
@@ -230,17 +259,23 @@ elif page == "Мой гардероб":
             notes = st.text_area("Заметки")
             photo = st.file_uploader("Фотография вещи", type=["png","jpg","jpeg"])
             submitted = st.form_submit_button("Сохранить вещь")
+
         if submitted:
             final_name = name.strip() or (subcategory + (f" · {color.strip()}" if color.strip() else ""))
             path = save_image(photo)
-            execute_insert("items", {"id": uuid.uuid4().hex, "user_id": user_id, "name": final_name, "category": category, "subcategory": subcategory, "occasion": occasion, "color": color, "season": season, "notes": notes, "image_path": path, "last_worn": None, "created_at": datetime.now().isoformat()})
-            st.success("Вещь добавлена!"); st.session_state.show_add_form = False; st.rerun()
+            execute_and_clear("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (uuid.uuid4().hex, user_id, final_name, category, subcategory, occasion,
+                     color, season, notes, path, None, datetime.now().isoformat()))
+            st.success("Вещь добавлена в гардероб!")
+            st.session_state.show_add_form = False
+            st.rerun()
 
     f1, f2 = st.columns(2)
     cf = f1.selectbox("Категория", ["Все"] + CATEGORIES)
     of = f2.selectbox("Для чего", ["Все"] + OCCASIONS)
     filtered = [x for x in items if (cf == "Все" or x["category"] == cf) and (of == "Все" or x["occasion"] == of)]
-    if not filtered: st.info("Пока здесь пусто. Добавь первую вещь!")
+    if not filtered:
+        st.info("Пока здесь пусто. Добавь первую вещь!")
     for x in filtered:
         with st.expander(f"{x['name']} · {x['category']} / {x['subcategory']}"):
             c1, c2 = st.columns([1, 2])
@@ -256,25 +291,34 @@ elif page == "Мой гардероб":
                 cat_options = CATEGORIES + [NEW_OPTION]
                 idx_cat = cat_options.index(x["category"]) if x["category"] in cat_options else 0
                 nc_choice = st.selectbox("Категория", cat_options, index=idx_cat, key=f"ec_{x['id']}")
+
                 if nc_choice == NEW_OPTION:
                     new_cat = st.text_input("Название новой категории", key=f"newcat_{x['id']}")
                     if st.button("Создать категорию", key=f"btncat_{x['id']}"):
                         if add_custom_category(user_id, new_cat, ""):
-                            st.success(f"Категория «{new_cat.strip()}» создана."); st.rerun()
-                        else: st.error("Введите название или такая категория уже есть.")
+                            st.success(f"Категория «{new_cat.strip()}» создана.")
+                            st.rerun()
+                        else:
+                            st.error("Введите название или такая категория уже есть.")
                     st.stop()
+
                 nc = nc_choice
                 subs = CATEGORY_TREE.get(nc, ["Другое"]) + [NEW_OPTION]
                 idx_sub = subs.index(x["subcategory"]) if x["subcategory"] in subs else 0
                 nsub_choice = st.selectbox("Тип", subs, index=idx_sub, key=f"es_{x['id']}")
+
                 if nsub_choice == NEW_OPTION:
                     new_sub = st.text_input("Название нового типа", key=f"newsub_{x['id']}")
                     if st.button("Создать тип", key=f"btnsub_{x['id']}"):
                         if add_custom_category(user_id, new_sub, nc):
-                            st.success(f"Тип «{new_sub.strip()}» создан."); st.rerun()
-                        else: st.error("Введите название или такой тип уже есть.")
+                            st.success(f"Тип «{new_sub.strip()}» создан в категории «{nc}».")
+                            st.rerun()
+                        else:
+                            st.error("Введите название или такой тип уже есть.")
                     st.stop()
+
                 nsub = nsub_choice
+
                 with st.form(f"edit_{x['id']}"):
                     st.markdown("**Изменить вещь**")
                     nn = st.text_input("Название (необязательно)", x["name"])
@@ -287,22 +331,27 @@ elif page == "Мой гардероб":
                     if st.form_submit_button("Сохранить изменения"):
                         final_name = nn.strip() or (nsub + (f" · {ncol.strip()}" if ncol.strip() else ""))
                         path = save_image(rep) if rep else x["image_path"]
-                        execute_update("items", {"id": x["id"], "user_id": user_id}, {"name": final_name, "category": nc, "subcategory": nsub, "occasion": no, "color": ncol, "season": ns, "notes": nnt, "last_worn": nd.isoformat(), "image_path": path})
+                        execute_and_clear("UPDATE items SET name=?, category=?, subcategory=?, occasion=?, color=?, season=?, notes=?, last_worn=?, image_path=? WHERE id=? AND user_id=?",
+                                (final_name, nc, nsub, no, ncol, ns, nnt, nd.isoformat(), path, x["id"], user_id))
                         st.success("Вещь обновлена."); st.rerun()
             col_a, col_b = st.columns(2)
             if col_a.button("Удалить вещь", key=f"d_{x['id']}"):
-                execute_delete("items", {"id": x["id"], "user_id": user_id})
+                execute_and_clear("DELETE FROM items WHERE id=? AND user_id=?", (x["id"], user_id))
                 if x["image_path"] and Path(x["image_path"]).exists(): Path(x["image_path"]).unlink()
                 st.rerun()
             if col_b.button("Отметить как надетую сегодня", key=f"w_{x['id']}"):
-                execute_update("items", {"id": x["id"], "user_id": user_id}, {"last_worn": date.today().isoformat()}); st.rerun()
-
+                execute_and_clear("UPDATE items SET last_worn=? WHERE id=? AND user_id=?", (date.today().isoformat(), x["id"], user_id)); st.rerun()
 elif page == "Мои образы":
     st.title("Мои образы")
-    if "show_outfit_form" not in st.session_state: st.session_state.show_outfit_form = False
-    if st.button("Создать образ", type="primary"): st.session_state.show_outfit_form = not st.session_state.show_outfit_form
+
+    if "show_outfit_form" not in st.session_state:
+        st.session_state.show_outfit_form = False
+    if st.button("Создать образ", type="primary"):
+        st.session_state.show_outfit_form = not st.session_state.show_outfit_form
+
     if st.session_state.show_outfit_form:
-        if not items: st.info("Сначала добавь хотя бы одну вещь.")
+        if not items:
+            st.info("Сначала добавь хотя бы одну вещь в гардероб.")
         else:
             avail = {x["id"]: f"{x['name']} ({x['category']}/{x['subcategory']})" for x in items}
             with st.form("new_outfit_inline"):
@@ -313,21 +362,30 @@ elif page == "Мои образы":
                 notes = st.text_area("Комментарий или идея")
                 photo = st.file_uploader("Фото готового образа (необязательно)", type=["png","jpg","jpeg"])
                 if st.form_submit_button("Сохранить образ"):
-                    if not on.strip(): st.error("Дай образу название.")
-                    elif not chosen: st.error("Выбери хотя бы одну вещь.")
+                    if not on.strip():
+                        st.error("Дай образу название.")
+                    elif not chosen:
+                        st.error("Выбери хотя бы одну вещь.")
                     else:
                         path = save_image(photo)
                         chosen_images = ",".join([item_image(i) or "" for i in chosen])
-                        execute_insert("outfits", {"id": uuid.uuid4().hex, "user_id": user_id, "name": on, "occasion": occ, "item_ids": ",".join(chosen), "item_images": chosen_images, "notes": notes, "image_path": path, "created_at": datetime.now().isoformat()})
-                        st.success("Образ сохранён!"); st.session_state.show_outfit_form = False; st.rerun()
-    if not outfits: st.info("Пока нет сохранённых образов.")
+                        execute_and_clear("INSERT INTO outfits VALUES (?,?,?,?,?,?,?,?,?)",
+                                (uuid.uuid4().hex, user_id, on, occ, ",".join(chosen), chosen_images, notes, path, datetime.now().isoformat()))
+                        st.success("Образ сохранён!")
+                        st.session_state.show_outfit_form = False
+                        st.rerun()
+
+    if not outfits:
+        st.info("Пока нет сохранённых образов. Нажми «Создать образ», чтобы добавить первый.")
     for o in outfits:
         with st.expander(o["name"]):
-            if o["image_path"]: show_image(o["image_path"], 300)
+            if o["image_path"]:
+                show_image(o["image_path"], 300)
             st.write(f"**Ситуация:** {o['occasion']}")
             ids = o["item_ids"].split(",") if o["item_ids"] else []
             st.write("**Вещи:** " + ", ".join(item_name(i) for i in ids))
             if ids:
+                st.write("**Фото вещей в образе:**")
                 cols = st.columns(min(len(ids), 4))
                 for idx, iid in enumerate(ids):
                     with cols[idx % 4]:
@@ -347,34 +405,47 @@ elif page == "Мои образы":
                     if st.form_submit_button("Сохранить изменения"):
                         path = save_image(np) if np else o["image_path"]
                         chosen_images = ",".join([item_image(i) or "" for i in nids])
-                        execute_update("outfits", {"id": o["id"], "user_id": user_id}, {"name": nn, "occasion": no, "item_ids": ",".join(nids), "item_images": chosen_images, "notes": nnt, "image_path": path})
+                        execute_and_clear("UPDATE outfits SET name=?, occasion=?, item_ids=?, item_images=?, notes=?, image_path=? WHERE id=? AND user_id=?",
+                                (nn, no, ",".join(nids), chosen_images, nnt, path, o["id"], user_id))
                         st.success("Образ обновлён."); st.rerun()
             if st.button("Удалить образ", key=f"do_{o['id']}"):
-                execute_delete("outfits", {"id": o["id"], "user_id": user_id})
+                execute_and_clear("DELETE FROM outfits WHERE id=? AND user_id=?", (o["id"], user_id))
                 if o["image_path"] and Path(o["image_path"]).exists(): Path(o["image_path"]).unlink()
                 st.rerun()
 
 elif page == "Перед покупкой":
     st.title("Стоит ли покупать?")
     st.write("Проверь, действительно ли новая вещь нужна твоему гардеробу.")
+
     cat_options = CATEGORIES + [NEW_OPTION]
     category_choice = st.selectbox("Категория", cat_options, key="pur_cat")
+
     if category_choice == NEW_OPTION:
         new_cat = st.text_input("Название новой категории", key="pur_new_cat")
         if st.button("Создать категорию", key="pur_btn_cat"):
-            if add_custom_category(user_id, new_cat, ""): st.success(f"Категория «{new_cat.strip()}» создана."); st.rerun()
-            else: st.error("Введите название или такая категория уже есть.")
+            if add_custom_category(user_id, new_cat, ""):
+                st.success(f"Категория «{new_cat.strip()}» создана.")
+                st.rerun()
+            else:
+                st.error("Введите название или такая категория уже есть.")
         st.stop()
+
     category = category_choice
     sub_options = CATEGORY_TREE.get(category, ["Другое"]) + [NEW_OPTION]
     sub_choice = st.selectbox("Тип", sub_options, key="pur_sub")
+
     if sub_choice == NEW_OPTION:
         new_sub = st.text_input("Название нового типа", key="pur_new_sub")
         if st.button("Создать тип", key="pur_btn_sub"):
-            if add_custom_category(user_id, new_sub, category): st.success(f"Тип «{new_sub.strip()}» создан."); st.rerun()
-            else: st.error("Введите название или такой тип уже есть.")
+            if add_custom_category(user_id, new_sub, category):
+                st.success(f"Тип «{new_sub.strip()}» создан в категории «{category}».")
+                st.rerun()
+            else:
+                st.error("Введите название или такой тип уже есть.")
         st.stop()
+
     subcategory = sub_choice
+
     with st.form("purchase"):
         name = st.text_input("Что хочешь купить?")
         color = st.text_input("Цвет покупки")
@@ -383,93 +454,177 @@ elif page == "Перед покупкой":
         if st.form_submit_button("Оценить покупку"):
             similar_cat = [x for x in items if x["category"] == category and x["subcategory"] == subcategory]
             similar_color = [x for x in items if x["color"] and color and x["color"].strip().lower() == color.strip().lower()]
-            st.session_state["purchase_review"] = {"name": name, "category": category, "subcategory": subcategory, "color": color, "price": price, "reason": reason, "similar_cat": [x["name"] for x in similar_cat], "similar_color": [x["name"] for x in similar_color]}
-            execute_insert("purchases", {"id": uuid.uuid4().hex, "user_id": user_id, "name": name, "category": category, "subcategory": subcategory, "color": color, "price": price, "reason": reason, "decision": "Думаю", "created_at": datetime.now().isoformat()})
+            st.session_state["purchase_review"] = {
+                "name": name, "category": category, "subcategory": subcategory,
+                "color": color, "price": price, "reason": reason,
+                "similar_cat": [x["name"] for x in similar_cat],
+                "similar_color": [x["name"] for x in similar_color],
+            }
+            execute_and_clear("INSERT INTO purchases VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (uuid.uuid4().hex, user_id, name, category, subcategory, color, price, reason, "Думаю", datetime.now().isoformat()))
     review = st.session_state.get("purchase_review")
     if review:
         st.subheader("Мнение помощника")
         st.metric("Стоимость", f"{review['price']:,.0f} ₽".replace(",", " "))
-        if review["similar_cat"]: st.warning(f"У тебя уже есть похожие вещи ({review['category']} / {review['subcategory']}): " + ", ".join(review["similar_cat"]))
-        else: st.success(f"В категории «{review['category']} / {review['subcategory']}» пока нет вещей.")
-        if review["color"] and review["similar_color"]: st.warning(f"Вещи того же цвета уже есть: " + ", ".join(review["similar_color"]))
-        elif review["color"]: st.info(f"Вещей цвета «{review['color']}» пока нет — это может быть акцентом.")
-        if not review["reason"].strip(): st.info("Попробуй сформулировать минимум два образа с покупкой.")
-        elif len(review["reason"].strip()) > 20: st.success("Ты уже продумала назначение вещи.")
-        st.write("Это подсказка, а не обязательное решение.")
-        purchases = rows("purchases", {"user_id": user_id})
+
+        if review["similar_cat"]:
+            st.warning(f"У тебя уже есть похожие вещи ({review['category']} / {review['subcategory']}): " + ", ".join(review["similar_cat"]))
+            st.write("Подумай, отличается ли новая вещь по назначению, цвету или сочетаниям.")
+        else:
+            st.success(f"В категории «{review['category']} / {review['subcategory']}» пока нет вещей. Возможно, покупка заполнит пробел.")
+
+        if review["color"] and review["similar_color"]:
+            st.warning(f"Вещи того же цвета уже есть: " + ", ".join(review["similar_color"]))
+        elif review["color"]:
+            st.info(f"Вещей цвета «{review['color']}» в гардеробе пока нет — это может быть хорошим акцентом.")
+
+        if not review["reason"].strip():
+            st.info("Попробуй сформулировать минимум два образа, с которыми будешь носить покупку.")
+        elif len(review["reason"].strip()) > 20:
+            st.success("Ты уже продумала назначение вещи. Проверь, подходит ли она к нескольким комплектам.")
+        st.write("Это подсказка, а не обязательное решение — выбор остаётся за тобой.")
+        purchases = rows("SELECT * FROM purchases WHERE user_id=? ORDER BY created_at DESC", (user_id,))
         if purchases:
             st.subheader("История решений")
             for p in purchases:
-                price_val = float(p["price"]) if p["price"] not in (None, "") else 0.0
-                st.write(f"• {p['name']} — {p['category']}/{p['subcategory'] or 'Другое'} — {p['color'] or 'цвет не указан'} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
+                try:
+                    price_val = float(p["price"]) if p["price"] not in (None, "") else 0.0
+                except (ValueError, TypeError):
+                    price_val = 0.0
+                color_val = p["color"] or "цвет не указан"
+                sub_val = p["subcategory"] or "Другое"
+                st.write(f"• {p['name']} — {p['category']}/{sub_val} — {color_val} — {price_val:,.0f} ₽ — {p['decision']}".replace(",", " "))
             if st.button("Очистить историю покупок", key="clear_purchases"):
-                execute_delete("purchases", {"user_id": user_id}); st.success("История очищена."); st.rerun()
-        else: st.info("История покупок пока пуста.")
+                execute_and_clear("DELETE FROM purchases WHERE user_id=?", (user_id,))
+                st.success("История покупок очищена.")
+                st.rerun()
+        else:
+            st.info("История покупок пока пуста.")
 
 elif page == "Стилист":
     st.title("Твой персональный стилист")
-    st.write("Выбери ситуацию — я сам соберу несколько готовых образов.")
+    st.write("Выбери ситуацию — я сам соберу несколько готовых образов из твоих вещей.")
+
     occ = st.selectbox("Куда нужен образ?", OCCASIONS)
     pool = [x for x in items if x["occasion"] == occ or x["occasion"] == "Другое"]
-    if not pool: st.info("Пока нет вещей с такой отметкой."); st.stop()
-    def by_cat(cat): return [x for x in pool if x["category"] == cat]
-    tops, bottoms = by_cat("Верх"), by_cat("Низ")
-    dresses, shoes = by_cat("Платья и комбинезоны"), by_cat("Обувь")
-    outer, bags, accs = by_cat("Верхняя одежда"), by_cat("Сумки"), by_cat("Аксессуары")
-    if not (bool(tops and bottoms) or bool(dresses)):
-        st.warning("Чтобы собрать образ, нужно хотя бы: верх + низ, либо платье."); st.stop()
-    def color_key(x): return (x["color"] or "").strip().lower()
-    def pick_accent(base):
-        bc = {color_key(i) for i in base if color_key(i)}
-        c = [a for a in accs if color_key(a) and color_key(a) not in bc]
-        return random.choice(c) if c else (random.choice(accs) if accs else None)
-    def pick_bag(base):
-        bc = {color_key(i) for i in base if color_key(i)}
-        c = [b for b in bags if color_key(b) and color_key(b) not in bc]
-        return random.choice(c) if c else (random.choice(bags) if bags else None)
+
+    if not pool:
+        st.info("Пока нет вещей с такой отметкой. Добавь вещь и выбери эту ситуацию.")
+        st.stop()
+
+    def by_cat(cat):
+        return [x for x in pool if x["category"] == cat]
+
+    tops = by_cat("Верх")
+    bottoms = by_cat("Низ")
+    dresses = by_cat("Платья и комбинезоны")
+    shoes = by_cat("Обувь")
+    outer = by_cat("Верхняя одежда")
+    bags = by_cat("Сумки")
+    accs = by_cat("Аксессуары")
+
+    can_basic = bool(tops and bottoms) or bool(dresses)
+    if not can_basic:
+        st.warning("Чтобы собрать образ, нужно хотя бы: верх + низ, либо платье/комбинезон.")
+        st.write("Сейчас в гардеробе под эту ситуацию есть:")
+        for label, arr in [("Верх", tops), ("Низ", bottoms), ("Платья", dresses),
+                           ("Обувь", shoes), ("Верхняя одежда", outer),
+                           ("Сумки", bags), ("Аксессуары", accs)]:
+            st.write(f"• {label}: {len(arr)}")
+        st.stop()
+    def color_key(x):
+        return (x["color"] or "").strip().lower()
+
+    def pick_accent(base_items):
+        base_colors = {color_key(i) for i in base_items if color_key(i)}
+        candidates = [a for a in accs if color_key(a) and color_key(a) not in base_colors]
+        return random.choice(candidates) if candidates else (random.choice(accs) if accs else None)
+
+    def pick_bag(base_items):
+        base_colors = {color_key(i) for i in base_items if color_key(i)}
+        candidates = [b for b in bags if color_key(b) and color_key(b) not in base_colors]
+        return random.choice(candidates) if candidates else (random.choice(bags) if bags else None)
+
     def build_outfit():
         base = []
-        if dresses and random.random() < 0.5: base.append(random.choice(dresses))
-        elif tops and bottoms: base.append(random.choice(tops)); base.append(random.choice(bottoms))
-        elif dresses: base.append(random.choice(dresses))
-        else: return None
-        if shoes: base.append(random.choice(shoes))
-        if outer and random.random() < 0.6: base.append(random.choice(outer))
+        if dresses and random.random() < 0.5:
+            base.append(random.choice(dresses))
+        elif tops and bottoms:
+            base.append(random.choice(tops))
+            base.append(random.choice(bottoms))
+        elif dresses:
+            base.append(random.choice(dresses))
+        else:
+            return None
+        if shoes:
+            base.append(random.choice(shoes))
+        if outer and random.random() < 0.6:
+            base.append(random.choice(outer))
         bag = pick_bag(base)
-        if bag: base.append(bag)
+        if bag:
+            base.append(bag)
         acc = pick_accent(base)
-        if acc: base.append(acc)
-        seen, res = set(), []
+        if acc:
+            base.append(acc)
+        seen, result = set(), []
         for it in base:
-            if it["id"] not in seen: seen.add(it["id"]); res.append(it)
-        return res
+            if it["id"] not in seen:
+                seen.add(it["id"])
+                result.append(it)
+        return result
+
+    def outfit_signature(outfit):
+        return tuple(sorted(i["id"] for i in outfit))
+
     if "stylist_variants" not in st.session_state or st.session_state.get("stylist_occ") != occ:
-        st.session_state.stylist_occ = occ; st.session_state.stylist_variants = []
+        st.session_state.stylist_occ = occ
+        st.session_state.stylist_variants = []
+
     if st.button("Собрать образы", type="primary") or not st.session_state.stylist_variants:
-        variants, sigs = [], set()
-        for _ in range(60):
-            if len(variants) >= 3: break
+        variants, signatures = [], set()
+        attempts = 0
+        while len(variants) < 3 and attempts < 60:
+            attempts += 1
             o = build_outfit()
-            if not o: break
-            sig = tuple(sorted(i["id"] for i in o))
-            if sig in sigs: continue
-            sigs.add(sig); variants.append(o)
+            if not o:
+                break
+            sig = outfit_signature(o)
+            if sig in signatures:
+                continue
+            signatures.add(sig)
+            variants.append(o)
         st.session_state.stylist_variants = variants
+
     variants = st.session_state.stylist_variants
-    if not variants: st.warning("Не удалось собрать образ. Проверь наличие верха и низа."); st.stop()
-    st.subheader(f"Готовые образы для «{occ.lower()}»")
-    for idx, outfit in enumerate(variants, 1):
+
+    if not variants:
+        st.warning("Не удалось собрать ни одного образа. Проверь, что есть верх и низ (или платье).")
+        st.stop()
+
+    st.subheader(f"Готовые образы для ситуации «{occ.lower()}»")
+
+    for idx, outfit in enumerate(variants, start=1):
         with st.container(border=True):
             st.markdown(f"### Образ {idx}")
             cols = st.columns(min(len(outfit), 4))
             for j, it in enumerate(outfit):
                 with cols[j % 4]:
                     show_image(it["image_path"], 140)
-                    st.caption(f"**{it['name']}**"); st.caption(f"{it['category']} / {it['subcategory']}")
-                    if it["color"]: st.caption(f"Цвет: {it['color']}")
-            st.write("**Состав:** " + ", ".join(it["name"] for it in outfit))
-            uc = set(color_key(it) for it in outfit if color_key(it))
-            if len(uc) >= 3: st.info("3+ цвета — следи за сочетанием.")
-            elif len(uc) == 1: st.info("Один цвет — можно добавить акцент.")
-            else: st.success("2 цвета — базовый и поддерживающий.")
-    if st.button("Собрать другие варианты"): st.session_state.stylist_variants = []; st.rerun()
+                    st.caption(f"**{it['name']}**")
+                    st.caption(f"{it['category']} / {it['subcategory']}")
+                    if it["color"]:
+                        st.caption(f"Цвет: {it['color']}")
+            names = [it["name"] for it in outfit]
+            st.write("**Состав:** " + ", ".join(names))
+            colors_in_outfit = [color_key(it) for it in outfit if color_key(it)]
+            unique_colors = set(colors_in_outfit)
+            if len(unique_colors) >= 3:
+                st.info("В образе 3+ цвета — следи, чтобы они сочетались. Один из них лучше сделать нейтральным.")
+            elif len(unique_colors) == 1:
+                st.info("Образ в одном цвете — выглядит цельно. Можно добавить аксессуар-акцент другого оттенка.")
+            else:
+                st.success("Хорошее сочетание: 2 цвета — базовый и поддерживающий.")
+
+    if st.button("Собрать другие варианты"):
+        st.session_state.stylist_variants = []
+        st.rerun()
